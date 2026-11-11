@@ -16,3 +16,7 @@ __pycache__/
 
 # Go build output
 bin/
+
+# eLearning sync tool
+tools/elearning-sync/.env
+tools/elearning-sync/.venv/
