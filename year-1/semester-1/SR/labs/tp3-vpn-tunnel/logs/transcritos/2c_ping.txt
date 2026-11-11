@@ -1,0 +1,34 @@
+
+seedvm:~$ docker exec -d client-10.9.0.5 bash -c "python3 -u /volumes/tun_2c.py > /volumes/tun2c.log 2>&1"
+
+seedvm:~$ docker exec client-10.9.0.5 ip -br addr show myInterface0
+myInterface0     UNKNOWN        192.168.53.99/24 fe80::5cfd:a303:4e2e:f42d/64 
+
+seedvm:~$ docker exec client-10.9.0.5 ip route
+default via 10.9.0.1 dev eth0 
+10.9.0.0/24 dev eth0 proto kernel scope link src 10.9.0.5 
+192.168.53.0/24 dev myInterface0 proto kernel scope link src 192.168.53.99 
+
+seedvm:~$ docker exec client-10.9.0.5 ping -c 3 -W 1 192.168.53.1
+PING 192.168.53.1 (192.168.53.1) 56(84) bytes of data.
+
+--- 192.168.53.1 ping statistics ---
+3 packets transmitted, 0 received, 100% packet loss, time 2044ms
+
+
+seedvm:~$ docker exec client-10.9.0.5 cat /volumes/tun2c.log
+Interface Name: myInterface0
+From tun ==>: 192.168.53.99 --> 192.168.53.1 | proto=1 len=84 id=16552 ttl=64
+   ICMP type=8 code=0 id=16 seq=1 payload=56B
+From tun ==>: 192.168.53.99 --> 192.168.53.1 | proto=1 len=84 id=16979 ttl=64
+   ICMP type=8 code=0 id=16 seq=2 payload=56B
+From tun ==>: 192.168.53.99 --> 192.168.53.1 | proto=1 len=84 id=17976 ttl=64
+   ICMP type=8 code=0 id=16 seq=3 payload=56B
+
+seedvm:~$ docker exec client-10.9.0.5 ip -s link show myInterface0
+14: myInterface0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 500
+    link/none 
+    RX: bytes  packets  errors  dropped overrun mcast   
+    0          0        0       0       0       0       
+    TX: bytes  packets  errors  dropped carrier collsns 
+    348        5        0       0       0       0       

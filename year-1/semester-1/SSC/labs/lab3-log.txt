@@ -1,0 +1,369 @@
+
+===== STEP A1: credenciais de processo =====
+--- id ---
+uid=1000(student) gid=1001(student) groups=1001(student),27(sudo),1000(docker)
+--- /proc/self/status (Uid / Gid) ---
+Uid:	1000	1000	1000	1000
+Gid:	1001	1001	1001	1001
+--- groups ---
+student sudo docker
+
+===== STEP A2: NSS =====
+--- nsswitch ---
+passwd:         files systemd
+group:          files systemd
+shadow:         files systemd
+--- getent passwd student ---
+student:x:1000:1001:SSC student:/home/student:/usr/bin/zsh
+--- getent passwd 0 ---
+root:x:0:0:root:/root:/bin/bash
+--- getent passwd svc-report ---
+svc-report:x:997:988::/opt/report:/usr/sbin/nologin
+
+===== STEP A3: armazem de credenciais =====
+--- ls -l ---
+-rw-r--r-- 1 root root   1778 Sep 30 10:09 /etc/passwd
+-rw-r----- 1 root shadow  944 Sep  4 08:13 /etc/shadow
+--- hash do student (esquema + comprimento, hash mascarado) ---
+scheme=$y$ len=73
+
+===== STEP B4: pilhas PAM =====
+
+--- cat -n /etc/pam.d/sudo ---
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	@include common-auth
+    10	@include common-account
+    11	@include common-session-noninteractive
+
+--- cat -n /etc/pam.d/common-auth ---
+     1	#
+     2	# /etc/pam.d/common-auth - authentication settings common to all services
+     3	#
+     4	# This file is included from other service-specific PAM config files,
+     5	# and should contain a list of the authentication modules that define
+     6	# the central authentication scheme for use on the system
+     7	# (e.g., /etc/shadow, LDAP, Kerberos, etc.).  The default is to use the
+     8	# traditional Unix authentication mechanisms.
+     9	#
+    10	# As of pam 1.0.1-6, this file is managed by pam-auth-update by default.
+    11	# To take advantage of this, it is recommended that you configure any
+    12	# local modules either before or after the default block, and use
+    13	# pam-auth-update to manage selection of other modules.  See
+    14	# pam-auth-update(8) for details.
+    15
+    16	# here are the per-package modules (the "Primary" block)
+    17	auth	[success=1 default=ignore]	pam_unix.so nullok
+    18	# here's the fallback if no module succeeds
+    19	auth	requisite			pam_deny.so
+    20	# prime the stack with a positive return value if there isn't one already;
+    21	# this avoids us returning an error just because nothing sets a success code
+    22	# since the modules above will each just jump around
+    23	auth	required			pam_permit.so
+    24	# and here are more per-package modules (the "Additional" block)
+    25	auth	optional			pam_cap.so
+    26	# end of pam-auth-update config
+
+--- cat -n /etc/pam.d/common-account ---
+     1	#
+     2	# /etc/pam.d/common-account - authorization settings common to all services
+     3	#
+     4	# This file is included from other service-specific PAM config files,
+     5	# and should contain a list of the authorization modules that define
+     6	# the central access policy for use on the system.  The default is to
+     7	# only deny service to users whose accounts are expired in /etc/shadow.
+     8	#
+     9	# As of pam 1.0.1-6, this file is managed by pam-auth-update by default.
+    10	# To take advantage of this, it is recommended that you configure any
+    11	# local modules either before or after the default block, and use
+    12	# pam-auth-update to manage selection of other modules.  See
+    13	# pam-auth-update(8) for details.
+    14	#
+    15
+    16	# here are the per-package modules (the "Primary" block)
+    17	account	[success=1 new_authtok_reqd=done default=ignore]	pam_unix.so
+    18	# here's the fallback if no module succeeds
+    19	account	requisite			pam_deny.so
+    20	# prime the stack with a positive return value if there isn't one already;
+    21	# this avoids us returning an error just because nothing sets a success code
+    22	# since the modules above will each just jump around
+    23	account	required			pam_permit.so
+    24	# and here are more per-package modules (the "Additional" block)
+    25	# end of pam-auth-update config
+
+--- cat -n /etc/pam.d/common-session-noninteractive ---
+     1	#
+     2	# /etc/pam.d/common-session-noninteractive - session-related modules
+     3	# common to all non-interactive services
+     4	#
+     5	# This file is included from other service-specific PAM config files,
+     6	# and should contain a list of modules that define tasks to be performed
+     7	# at the start and end of all non-interactive sessions.
+     8	#
+     9	# As of pam 1.0.1-6, this file is managed by pam-auth-update by default.
+    10	# To take advantage of this, it is recommended that you configure any
+    11	# local modules either before or after the default block, and use
+    12	# pam-auth-update to manage selection of other modules.  See
+    13	# pam-auth-update(8) for details.
+    14
+    15	# here are the per-package modules (the "Primary" block)
+    16	session	[default=1]			pam_permit.so
+    17	# here's the fallback if no module succeeds
+    18	session	requisite			pam_deny.so
+    19	# prime the stack with a positive return value if there isn't one already;
+    20	# this avoids us returning an error just because nothing sets a success code
+    21	# since the modules above will each just jump around
+    22	session	required			pam_permit.so
+    23	# The pam_umask module will set the umask according to the system default in
+    24	# /etc/login.defs and user settings, solving the problem of different
+    25	# umask settings with different shells, display managers, remote sessions etc.
+    26	# See "man pam_umask".
+    27	session optional			pam_umask.so
+    28	# and here are more per-package modules (the "Additional" block)
+    29	session	required	pam_unix.so
+    30	# end of pam-auth-update config
+
+--- cat -n /etc/pam.d/common-password ---
+     1	#
+     2	# /etc/pam.d/common-password - password-related modules common to all services
+     3	#
+     4	# This file is included from other service-specific PAM config files,
+     5	# and should contain a list of modules that define the services to be
+     6	# used to change user passwords.  The default is pam_unix.
+     7
+     8	# Explanation of pam_unix options:
+     9	# The "yescrypt" option enables
+    10	#hashed passwords using the yescrypt algorithm, introduced in Debian
+    11	#11.  Without this option, the default is Unix crypt.  Prior releases
+    12	#used the option "sha512"; if a shadow password hash will be shared
+    13	#between Debian 11 and older releases replace "yescrypt" with "sha512"
+    14	#for compatibility .  The "obscure" option replaces the old
+    15	#`OBSCURE_CHECKS_ENAB' option in login.defs.  See the pam_unix manpage
+    16	#for other options.
+    17
+    18	# As of pam 1.0.1-6, this file is managed by pam-auth-update by default.
+    19	# To take advantage of this, it is recommended that you configure any
+    20	# local modules either before or after the default block, and use
+    21	# pam-auth-update to manage selection of other modules.  See
+    22	# pam-auth-update(8) for details.
+    23
+    24	# here are the per-package modules (the "Primary" block)
+    25	password	requisite			pam_pwquality.so retry=3
+    26	password	[success=1 default=ignore]	pam_unix.so obscure use_authtok try_first_pass yescrypt
+    27	# here's the fallback if no module succeeds
+    28	password	requisite			pam_deny.so
+    29	# prime the stack with a positive return value if there isn't one already;
+    30	# this avoids us returning an error just because nothing sets a success code
+    31	# since the modules above will each just jump around
+    32	password	required			pam_permit.so
+    33	# and here are more per-package modules (the "Additional" block)
+    34	# end of pam-auth-update config
+
+===== STEP B5: ambiente =====
+--- uname ---
+Linux aarch64
+--- os-release ---
+Ubuntu 24.04.5 LTS
+--- modulos de seguranca ---
+pam_deny.so
+pam_faillock.so
+pam_permit.so
+pam_pwquality.so
+pam_sepermit.so
+pam_unix.so
+
+===== STEP C1: copia de seguranca do sudo =====
+'/etc/pam.d/sudo' -> '/root/sudo.pam.bak'
+
+===== STEP C2: introduzir a falha =====
+--- /etc/pam.d/sudo ---
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	auth	required	pam_nonexistent.so
+    10	@include common-account
+    11	@include common-session-noninteractive
+OK: falha instalada
+
+===== STEP C3: sudo depois da falha =====
+sudo: PAM authentication error: Module is unknown
+sudo: a password is required
+exit=1
+
+===== STEP C4: reparar o sudo =====
+'/root/sudo.pam.bak' -> '/etc/pam.d/sudo'
+
+===== STEP D1: copia de seguranca (faillock) =====
+'/etc/pam.d/sudo' -> '/root/sudo.pam.faillock.bak'
+
+===== STEP D2: instalar a pilha pam_faillock =====
+--- /etc/pam.d/sudo ---
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	auth      required                    pam_faillock.so preauth deny=3 unlock_time=120
+    10	auth      [success=1 default=ignore]  pam_unix.so nullok
+    11	auth      [default=die]               pam_faillock.so authfail deny=3 unlock_time=120
+    12	auth      requisite                   pam_deny.so
+    13	auth      required                    pam_permit.so
+    14	auth      sufficient                  pam_faillock.so authsucc deny=3 unlock_time=120
+    15	@include common-account
+    16	@include common-session-noninteractive
+
+===== STEP D3: repor o contador =====
+exit=0
+
+===== STEP D4: palavra-passe correta (tem de funcionar) =====
+sudo: 3 incorrect password attempts
+exit=1
+
+===== STEP D6a: contagem apos as tentativas rejeitadas =====
+student:
+When                Type  Source                                           Valid
+2026-10-07 11:56:08 TTY   /dev/pts/2                                           V
+--- reset ---
+
+===== STEP D2b: pilha pam_faillock corrigida =====
+'/root/sudo.pam.faillock.bak' -> '/etc/pam.d/sudo'
+--- /etc/pam.d/sudo ---
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	auth      required                        pam_faillock.so preauth deny=3 unlock_time=120
+    10	auth      [success=1 default=ignore]      pam_unix.so nullok
+    11	auth      [default=die]                   pam_faillock.so authfail deny=3 unlock_time=120
+    12	auth      sufficient                      pam_faillock.so authsucc deny=3 unlock_time=120
+    13	auth      required                        pam_deny.so
+    14	@include common-account
+    15	@include common-session-noninteractive
+
+===== STEP D4: palavra-passe correta (tem de funcionar) =====
+uid=0(root) gid=0(root) groups=0(root)
+exit=0
+
+===== STEP D5: tres palavras-passe erradas =====
+uid=0(root) gid=0(root) groups=0(root)
+exit=0
+
+===== STEP D6: contagem de falhas =====
+student:
+When                Type  Source                                           Valid
+--- reset ---
+
+===== STEP D7: repor o sudo =====
+'/root/sudo.pam.faillock.bak' -> '/etc/pam.d/sudo'
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	@include common-auth
+    10	@include common-account
+    11	@include common-session-noninteractive
+
+===== STEP E1: copia de seguranca do pwquality.conf =====
+'/etc/security/pwquality.conf' -> '/root/pwquality.conf.bak'
+--- /etc/security/pwquality.conf ---
+(bloco de comentarios por omissao do ficheiro omitido na transcricao)
+
+===== STEP E2: instalar a regra de qualidade =====
+--- regra instalada ---
+82:minlen = 12
+83:dcredit = -1
+84:ucredit = -1
+
+===== STEP D2c: reinstalar a pilha pam_faillock =====
+'/root/sudo.pam.faillock.bak' -> '/etc/pam.d/sudo'
+--- /etc/pam.d/sudo ---
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	auth      required                        pam_faillock.so preauth deny=3 unlock_time=120
+    10	auth      [success=1 default=ignore]      pam_unix.so nullok
+    11	auth      [default=die]                   pam_faillock.so authfail deny=3 unlock_time=120
+    12	auth      sufficient                      pam_faillock.so authsucc deny=3 unlock_time=120
+    13	auth      required                        pam_deny.so
+    14	@include common-account
+    15	@include common-session-noninteractive
+
+===== STEP D3c: repor o contador =====
+exit=0
+
+===== STEP D5c: tres palavras-passe ERRADAS =====
+sudo: 3 incorrect password attempts
+exit=1
+
+===== STEP D6c: contagem de falhas =====
+student:
+When                Type  Source                                           Valid
+2026-10-07 12:00:21 TTY   /dev/pts/2                                           V
+2026-10-07 12:00:24 TTY   /dev/pts/2                                           V
+2026-10-07 12:00:27 TTY   /dev/pts/2                                           V
+--- reset ---
+
+===== STEP D7c: repor o sudo =====
+'/root/sudo.pam.faillock.bak' -> '/etc/pam.d/sudo'
+     1	#%PAM-1.0
+     2
+     3	# Set up user limits from /etc/security/limits.conf.
+     4	session    required   pam_limits.so
+     5
+     6	session    required   pam_env.so readenv=1 user_readenv=0
+     7	session    required   pam_env.so readenv=1 envfile=/etc/default/locale user_readenv=0
+     8
+     9	@include common-auth
+    10	@include common-account
+    11	@include common-session-noninteractive
+
+===== STEP E3: teste de qualidade (passwd) =====
+Changing password for student.
+Current password:
+New password:
+BAD PASSWORD: The password contains less than 1 digits
+New password:
+BAD PASSWORD: The password contains less than 1 digits
+New password:
+BAD PASSWORD: The password contains less than 1 digits
+passwd: Have exhausted maximum number of retries for service
+passwd: password unchanged
+
+===== STEP E4: repor o pwquality.conf =====
+'/root/pwquality.conf.bak' -> '/etc/security/pwquality.conf'
+(sem linhas acima = reposto)
+
+===== STEP F: verificacao final =====
+--- diff do sudo contra o original ---
+sudo == original
+--- faillock ---
+student:
+When                Type  Source                                           Valid
+exit=0

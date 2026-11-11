@@ -1,0 +1,132 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{enumitem}
+
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue}
+\setlist{noitemsep,topsep=3pt}
+
+\title{Segurança de Dados\\\large Assignment 1}
+\author{Hugo Soares}
+\date{24 de setembro de 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Questão 1}
+
+Foi escolhido o Mozilla Firefox, um navegador utilizado diariamente para aceder a serviços Web. A pesquisa incidiu sobre CVEs publicadas nos últimos doze meses relativamente à data deste relatório. As três vulnerabilidades selecionadas afetam diretamente o Firefox e foram corrigidas na versão 152.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{p{2.2cm}X p{2.1cm} p{2.1cm}}
+\toprule
+\textbf{CVE} & \textbf{Descrição} & \textbf{CVSS e interpretação} & \textbf{CWE / exploit} \\
+\midrule
+CVE-2026-12300 & Falha de segurança de memória no Firefox, corrigida na versão 152. A exploração poderia permitir a leitura de dados fora dos limites esperados do buffer, comprometendo a confidencialidade do processo \cite{cve12300}. & 5.3 Médio (CVSS 3.1): exploração remota sem autenticação nem interação, com impacto limitado na confidencialidade. & CWE-119; exploit público não confirmado nas fontes consultadas. \\
+CVE-2026-12301 & Outra falha de segurança de memória no Firefox, também corrigida na versão 152. Erros deste tipo podem provocar leitura ou corrupção de memória e, dependendo do contexto, levar a divulgação de informação ou execução de código \cite{cve12301}. & 5.3 Médio (CVSS 3.1): ataque remoto com impacto baixo na confidencialidade e sem impacto direto registado na integridade ou disponibilidade. & CWE-119; exploit público não confirmado nas fontes consultadas. \\
+CVE-2026-12303 & O componente Graphics: WebGPU tinha condições de fronteira incorretas, permitindo uma leitura fora dos limites e possível divulgação de informação através de conteúdo Web especialmente preparado \cite{cve12303}. & 4.3 Médio (CVSS 3.1): requer interação do utilizador e afeta principalmente a confidencialidade. & CWE-125; exploit público não confirmado nas fontes consultadas. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+As pontuações, classificações e CWEs foram consultadas nos registos oficiais CVE. ``Exploit: Não confirmado'' significa que não foi encontrada uma prova de conceito pública nas fontes consultadas; não significa que a vulnerabilidade seja inexequível. A mitigação comum é atualizar o Firefox para a versão 152 ou posterior e manter as atualizações automáticas ativas.
+
+\subsection*{Análise aprofundada da CVE-2026-12303}
+
+\textbf{Impacto em produção.} Um utilizador que abrisse uma página Web maliciosa poderia expor informação presente no processo do Firefox através de uma leitura fora dos limites no componente WebGPU. O impacto principal é a perda de confidencialidade; em certos cenários, uma falha de memória semelhante poderia também ser encadeada com outra vulnerabilidade para obter execução de código.
+
+\textbf{Sistemas expostos.} Estão expostos computadores que executem versões do Firefox anteriores à 152 e tenham o WebGPU disponível. O risco é relevante em estações de trabalho que naveguem por páginas não confiáveis, executem aplicações Web com gráficos 3D ou processem publicidade e conteúdos incorporados de terceiros.
+
+\textbf{Patch e prevenção.} A correção está incluída no Firefox 152. Deve-se atualizar o navegador através do mecanismo normal de atualização, confirmar a versão instalada e reiniciar o Firefox quando solicitado. Como medidas complementares, devem manter-se ativos o isolamento de processos, a proteção contra sites maliciosos e as atualizações automáticas; em ambientes que não possam atualizar imediatamente, pode-se desativar temporariamente o WebGPU através das políticas de gestão do Firefox, tendo em conta a perda de funcionalidade gráfica.
+\section*{Questão 2}
+
+Num pagamento online participam o cliente, o operador do cartão e o vendedor. O sistema deve garantir:
+\begin{itemize}
+\item \textbf{Confidencialidade}: número do cartão, credenciais, montante e dados pessoais não devem ser divulgados a terceiros.
+\item \textbf{Integridade}: identidade do vendedor, montante, moeda e destino do pagamento não podem ser alterados sem deteção.
+\item \textbf{Autenticidade}: o cliente deve autenticar-se perante o operador e o vendedor deve ser autenticado pelo cliente; o operador deve confirmar a autorização da transação.
+\item \textbf{Não repúdio e responsabilização}: devem existir registos, identificadores e provas suficientes para atribuir a operação às entidades envolvidas.
+\item \textbf{Disponibilidade e frescura}: o serviço deve resistir a indisponibilidade e replay de pedidos antigos.
+\end{itemize}
+
+As principais classes de ameaça são interceção e man-in-the-middle, phishing e roubo de credenciais, malware no dispositivo do cliente, fraude por replay ou manipulação de mensagens, roubo de dados no vendedor ou no operador, abuso de privilégios internos, comprometimento de APIs e ataques de negação de serviço. TLS, autenticação multifator, tokenização, 3-D Secure, assinaturas/MACs, limites de operação, deteção de fraude e logs imutáveis ajudam a reduzir esses riscos.
+
+\section*{Questão 3}
+
+As quatro CVEs mostram que a segurança de um sistema criptográfico depende tanto da sua implementação como do algoritmo utilizado. Cada caso ilustra uma falha diferente.
+\begin{itemize}
+\item \textbf{CVE-2025-30406 -- Gladinet CentreStack}: a aplicação utilizava uma \texttt{machineKey} criptográfica hardcoded. Quem conhecesse essa chave podia criar um payload de desserialização malicioso e obter execução remota de código no servidor. O problema corresponde principalmente a \texttt{CWE-321} (uso de chave criptográfica hardcoded) e \texttt{CWE-798} (credencial hardcoded). É uma falha crítica, explorada na prática, e deve ser mitigada atualizando o CentreStack para uma versão corrigida e removendo ou regenerando a chave conforme as instruções do fabricante \cite{cve30406}.
+\item \textbf{CVE-2025-52374 -- hMailServer}: o programa usava uma chave criptográfica hardcoded para proteger palavras-passe guardadas no ficheiro de configuração do \texttt{hMailAdmin}. Um atacante com acesso a esse ficheiro podia desencriptar as credenciais e usá-las para aceder a outras consolas de administração. A CWE associada é a \texttt{CWE-321}. A correção exige atualizar para uma versão suportada pelo fabricante; também é necessário restringir o acesso ao ficheiro, alterar as palavras-passe potencialmente expostas e evitar reutilização de credenciais \cite{cve52374}.
+\item \textbf{CVE-2025-54887 -- Ruby \texttt{jwe}}: nas versões até 1.1.0, as tags de autenticação de JWE podiam ser obtidas por brute force. Isso permitia modificar mensagens, criar JWEs arbitrários e, em certas condições, recuperar a chave interna GHASH, comprometendo confidencialidade e integridade. A falha é classificada como \texttt{CWE-354} (validação incorreta do valor de integridade). A versão 1.1.1 corrige o problema, mas como as chaves podem já ter sido expostas, é necessário atualizá-la e rodar as chaves de encriptação \cite{cve54887}.
+\item \textbf{CVE-2025-3501 -- Keycloak}: quando a política de verificação era configurada como \texttt{ALL}, o Keycloak podia ignorar a validação do certificado no trust store. Assim, uma ligação TLS podia aceitar um certificado que não devia ser considerado confiável, quebrando a autenticação do servidor e permitindo um ataque man-in-the-middle. A CWE associada é a \texttt{CWE-297}, relacionada com validação incorreta de certificados. A mitigação consiste em aplicar a atualização do Keycloak indicada pelo fabricante e rever as políticas de trust store e de verificação de certificados \cite{cve3501}.
+\end{itemize}
+
+Em conjunto, os casos revelam fontes recorrentes de vulnerabilidade: segredos incorporados no código, uso inseguro de primitivas criptográficas, validação incompleta de integridade e configuração incorreta de autenticação. As CWEs mais relevantes são, respetivamente, \texttt{CWE-321}, \texttt{CWE-798}, \texttt{CWE-354} e \texttt{CWE-297}. Portanto, a criptografia não substitui gestão adequada de chaves, validação rigorosa, configuração segura, atualizações e revisão de código.
+
+\section*{Questão 4}
+
+Considera-se uma VPN baseada em WireGuard entre o computador do trabalhador remoto e a rede corporativa. Deve garantir confidencialidade e integridade dos pacotes, autenticação mútua dos peers, controlo de acesso à rede interna, proteção contra replay, perfect forward secrecy quando possível e disponibilidade suficiente para o trabalho remoto. Também deve impedir que um atacante se faça passar pelo gateway ou pelo trabalhador.
+
+O WireGuard usa pares de chaves públicas/privadas Curve25519 para autenticar peers e estabelecer chaves efémeras através de um handshake baseado em Noise. Deriva chaves de sessão com uma função de derivação baseada em HKDF e protege os dados com ChaCha20-Poly1305, que fornece confidencialidade e autenticação. Nonces, contadores e mecanismos anti-replay impedem a reutilização de pacotes. A distribuição da chave pública do gateway e a configuração de allowed IPs são essenciais para associar cada peer à rede autorizada.
+
+As ameaças incluem roubo da chave privada do cliente, comprometimento do gateway, configuração excessivamente permissiva, endpoint infetado, phishing, ataque de negação de serviço, bloqueio ou interferência na rede, replay, fuga de DNS e exposição de tráfego antes de entrar ou depois de sair da VPN. A mitigação exige armazenamento protegido de chaves, rotação e revogação de peers, MFA no acesso complementar, atualizações, segmentação, regras de firewall, DNS seguro, logs e monitorização.
+
+\section*{Questão 5}
+
+Foi selecionada a implementação OpenSSH, uma implementação amplamente usada do protocolo SSH para administração remota, transferência de ficheiros e túneis seguros. As três vulnerabilidades seguintes foram publicadas nos últimos doze meses relativamente à data deste relatório.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{p{2.2cm}X p{2.1cm} p{2.1cm}}
+\toprule
+\textbf{CVE} & \textbf{Descrição} & \textbf{CVSS e interpretação} & \textbf{CWE / exploit} \\
+\midrule
+CVE-2026-35414 & O OpenSSH anterior à versão 10.3 tratava incorretamente a opção \texttt{principals} de \texttt{authorized\_keys} em cenários com listas de principals e uma Certificate Authority. Um atacante podia conseguir autenticação ou autorização diferente da pretendida \cite{cve35414}. & 8.1 Alto (métrica CNA; o NVD apresenta 4.2): pode afetar confidencialidade, integridade e disponibilidade, embora exija condições difíceis. & CWE-670; exploit público não confirmado nas fontes consultadas. \\
+CVE-2026-55654 & Durante a limpeza dos indicadores de autenticação GSSAPI, uma terminação nula em falta podia causar uma leitura fora dos limites. Em servidores configurados com GSSAPI e Kerberos, um atacante remoto podia provocar a interrupção do caminho de autenticação e causar negação de serviço \cite{cve55654}. & 7.7 Alto: ataque remoto sem autenticação, com impacto na disponibilidade do serviço. & CWE-125; exploit público não confirmado nas fontes consultadas. \\
+CVE-2026-60002 & O cliente SSH podia sofrer um use-after-free quando o servidor alterava a sua host key durante uma renegociação de chaves. A exploração podia comprometer a sessão e, conforme a métrica utilizada, afetar confidencialidade, integridade e disponibilidade \cite{cve60002}. & 9.4 Crítico (métrica CNA; o NVD apresenta 7.7): ataque remoto sem autenticação durante o rekeying. & CWE-416; exploit público não confirmado nas fontes consultadas. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+As versões afetadas são OpenSSH anteriores a 10.3 para as CVE-2026-35414 e CVE-2026-55654, e anteriores a 10.4 para a CVE-2026-60002. As correções devem ser instaladas através da versão oficial correspondente ou do pacote de segurança da distribuição Linux. Estes casos afetam mecanismos de autenticação, certificados, GSSAPI/Kerberos e renegociação de chaves, mostrando que a segurança de uma implementação depende tanto da criptografia como da validação e gestão do protocolo.
+
+\subsection*{Análise aprofundada da CVE-2026-60002}
+
+\textbf{Impacto em produção.} Durante o rekeying, o cliente SSH podia aceder a memória já libertada quando o servidor alterava a sua host key. Um atacante capaz de controlar ou comprometer o servidor poderia explorar o comportamento para causar corrupção de memória, terminar o cliente ou, em determinadas condições, obter execução de código. Isso compromete a confidencialidade e a integridade das sessões SSH.
+
+\textbf{Patch e aplicação.} Deve-se atualizar o cliente OpenSSH para a versão 10.4 ou posterior, ou instalar o pacote corrigido fornecido pelo sistema operativo. Depois da atualização, deve-se confirmar a versão, testar a ligação e rever os logs de autenticação. Enquanto a atualização não for possível, deve-se evitar ligações a servidores não confiáveis, verificar as host keys por um canal independente e limitar o acesso SSH através de bastion hosts e regras de firewall.
+
+\textbf{Cenários mais expostos e prevenção.} O risco é maior em clientes SSH usados para administração remota, automação e pipelines que mantenham sessões longas e permitam renegociação de chaves. A atualização é a medida principal; adicionalmente, devem ser verificadas as chaves dos hosts, restringidos os servidores autorizados, aplicados privilégios mínimos e monitorizados reinícios inesperados ou falhas durante autenticação e rekeying.
+
+\begin{thebibliography}{99}
+\bibitem{cve8913} CVE Program, ``CVE-2026-8913.'' \url{https://www.cve.org/CVERecord?id=CVE-2026-8913}
+\bibitem{tpfaq} TP-Link, ``Archer MR600 V5 security advisory.'' \url{https://www.tp-link.com/us/support/faq/5122/}
+\bibitem{cve72603} CVE Program, ``CVE-2026-72603.'' \url{https://www.cve.org/CVERecord?id=CVE-2026-72603}
+\bibitem{wgeasy} wg-easy, ``WireGuard Easy project repository.'' \url{https://github.com/wg-easy/wg-easy}
+\bibitem{cve58085} CVE Program, ``CVE-2026-58085.'' \url{https://www.cve.org/CVERecord?id=CVE-2026-58085}
+\bibitem{freebsd} FreeBSD, ``FreeBSD-SA-26:52.if\_wg.'' \url{https://security.freebsd.org/advisories/FreeBSD-SA-26:52.if_wg.asc}
+\bibitem{nvd26465} NVD, ``CVE-2025-26465.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-26465}
+\bibitem{qualys} Qualys, ``OpenSSH MITM and DoS vulnerabilities.'' \url{https://www.qualys.com/2025/02/18/openssh-mitm-dos.txt}
+\bibitem{nvd26466} NVD, ``CVE-2025-26466.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-26466}
+\bibitem{nvd32728} NVD, ``CVE-2025-32728.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-32728}
+\bibitem{openssh} OpenSSH, ``Security.'' \url{https://www.openssh.org/security.html}
+\bibitem{cve35414} NVD, ``CVE-2026-35414.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-35414}
+\bibitem{cve55654} NVD, ``CVE-2026-55654.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-55654}
+\bibitem{cve60002} NVD, ``CVE-2026-60002.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-60002}
+\bibitem{cve12300} NVD, ``CVE-2026-12300.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-12300}
+\bibitem{cve12301} NVD, ``CVE-2026-12301.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-12301}
+\bibitem{cve12303} NVD, ``CVE-2026-12303.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2026-12303}
+\bibitem{cve30406} NVD, ``CVE-2025-30406.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-30406}
+\bibitem{cve52374} NVD, ``CVE-2025-52374.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-52374}
+\bibitem{cve54887} NVD, ``CVE-2025-54887.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-54887}
+\bibitem{cve3501} NVD, ``CVE-2025-3501.'' \url{https://nvd.nist.gov/vuln/detail/CVE-2025-3501}
+\end{thebibliography}
+
+\end{document}

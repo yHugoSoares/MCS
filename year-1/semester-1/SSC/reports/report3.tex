@@ -1,0 +1,797 @@
+%==============================================================================
+%  Computer Systems Security (SSC), 2026-27 -- Universidade do Minho
+%  Lab report 3: Bloco 3 -- Labs 6-8 (setuid/sudo, capabilities, AppArmor)
+%  Build: pdflatex report3.tex
+%==============================================================================
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage{textcomp}
+\usepackage{lmodern}
+\usepackage{tgheros}
+\usepackage{microtype}
+
+\usepackage[margin=2.5cm,headheight=15pt,footskip=32pt]{geometry}
+
+\usepackage[table]{xcolor}
+\definecolor{sscnblue}{RGB}{15,42,79}
+\definecolor{sscblue}{RGB}{31,92,156}
+\definecolor{sscline}{RGB}{198,207,219}
+\definecolor{sscbg}{RGB}{245,247,250}
+\definecolor{sscmute}{RGB}{95,104,116}
+
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable}
+\usepackage{hyperref}
+\usepackage{lastpage}
+\emergencystretch=2em
+\hypersetup{
+  colorlinks=true,
+  linkcolor=sscnblue,
+  urlcolor=sscblue,
+  citecolor=sscnblue,
+  pdftitle={Lab report 3: Bloco 3 -- Labs 6-8 (setuid, capabilities, AppArmor)},
+  pdfauthor={Hugo Soares a107293},
+  pdfsubject={SSC --- setuid, sudo, capabilities, AppArmor e detec\c{c}\~ao},
+  pdflang={pt}
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt plus 1pt}
+\setlist{topsep=3pt,itemsep=2pt,parsep=0pt,leftmargin=1.6em}
+\setlist[itemize]{label=\textcolor{sscblue}{\textbullet}}
+\setlist[enumerate]{label=\textcolor{sscnblue}{\arabic*.},ref=\arabic*}
+
+\titleformat{\section}
+  {\Large\bfseries\color{sscnblue}}{\thesection}{0.9em}{}
+  [\vspace{3pt}{\color{sscline}\titlerule[0.7pt]}]
+\titleformat{\subsection}
+  {\large\bfseries\color{sscblue}}{\thesubsection}{0.9em}{}
+\titlespacing*{\section}{0pt}{20pt}{10pt}
+\titlespacing*{\subsection}{0pt}{15pt}{6pt}
+
+\captionsetup{font=small,labelfont={bf,color=sscnblue},labelsep=quad}
+\captionsetup[table]{position=top}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\color{sscmute}Bloco 3 --- setuid, sudo, capabilities, AppArmor}
+\fancyhead[R]{\footnotesize\color{sscmute}\textit{Computer Systems Security (SSC)}}
+\fancyfoot[C]{\footnotesize\color{sscmute}\thepage\ / \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{{\color{sscline}\hrule width\headwidth height 0.4pt}}
+\renewcommand{\footrulewidth}{0pt}
+
+\newtcolorbox{callout}[2][]{%
+  breakable, colback=sscbg, colframe=sscnblue, coltitle=white,
+  fonttitle=\bfseries\small, title={#2},
+  boxrule=0.6pt, arc=2pt, left=7pt, right=7pt, top=4pt, bottom=4pt,
+  before skip=8pt, after skip=8pt, #1}
+
+\newenvironment{answer}[1]{%
+  \par\addvspace{7pt}\noindent
+  \hangindent=2.4em\hangafter=1
+  {\color{sscnblue}\bfseries #1\hspace{0.55em}}\ignorespaces}
+  {\par\addvspace{5pt}}
+
+\lstdefinestyle{ssc}{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{sscblue}\bfseries,
+  commentstyle=\color{sscmute}\itshape,
+  stringstyle=\color{sscnblue},
+  backgroundcolor=\color{sscbg},
+  frame=single, framerule=0.4pt, rulecolor=\color{sscline},
+  xleftmargin=1em, xrightmargin=1em,
+  aboveskip=9pt, belowskip=9pt,
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  breaklines=true, tabsize=2, upquote=true,
+  literate={'}{{\textquotesingle}}1 {`}{{\textquotesingle}}1
+}
+\lstset{style=ssc}
+
+\newcommand{\cmd}[1]{\textcolor{sscnblue}{\texttt{#1}}}
+\newcommand{\file}[1]{\texttt{\detokenize{#1}}}
+
+\title{Laborat\'orio 6, 7 e 8: setuid, sudo, capabilities e AppArmor}
+\author{Hugo Soares a107293}
+\date{\today}
+
+\begin{document}
+
+%==============================================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+    \vspace*{1.5cm}
+    {\large\color{sscmute}\MakeUppercase{Universidade do Minho}}\\[2pt]
+    {\small\color{sscmute}Computer Systems Security (SSC) --- MCS, 2026--27}\\[8pt]
+    {\color{sscline}\rule{0.8\textwidth}{0.8pt}}\\[2.2cm]
+
+    {\LARGE\bfseries\color{sscnblue}Lab report 3\\[6pt]
+     Bloco 3 --- Lab 6, 7 e 8}\\[0.7cm]
+    {\large\color{sscblue}Setuid, sudo, capabilities e AppArmor}\\[3.0cm]
+
+    \vfill
+\end{center}
+\end{titlepage}
+
+%==============================================================================
+\section{Prepara\c{c}\~ao}
+
+\begin{answer}{P1.}
+O real UID \'e a identidade do processo --- o utilizador que o lan\c{c}ou, a quem se
+imputam os recursos e se dirigem os sinais. O effective UID \'e a identidade que o kernel
+usa para decidir o acesso. Numa permiss\~ao de ficheiro o kernel compara com o
+\textbf{effective} UID (e com os grupos do processo), nunca com o real.
+\end{answer}
+
+\begin{answer}{P2.}
+Quando se executa um ficheiro com o bit setuid, o kernel p\~oe o euid do processo igual ao
+UID do \emph{dono do ficheiro} e guarda o valor anterior no saved set-user-ID. O processo
+passa a carregar o privil\'egio do dono do bin\'ario (root, no caso do
+\cmd{backup-tool}); o real UID continua a ser o de quem o lan\c{c}ou. No \cmd{passwd}
+v\^e-se bem:
+
+\begin{lstlisting}
+$ ls -l /usr/bin/passwd
+-rwsr-xr-x 1 root root 72056 /usr/bin/passwd
+$ ps -o pid,ruser,euser,cmd -C passwd
+    PID RUSER    EUSER    CMD
+  10527 student  root     passwd
+$ grep '^Uid:' /proc/10527/status
+Uid:  1000  0  0  0
+\end{lstlisting}
+
+Os quatro valores s\~ao real, effective, saved e filesystem. S\'o o effective mudou: o
+gid ficou igual, porque o bin\'ario \'e setuid e n\~ao setgid.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 1}
+
+\begin{answer}{1a.}
+O mecanismo \'e o bit setuid, aplicado pelo \cmd{execve}. O \cmd{passwd} precisa dele
+porque tem de escrever \file{/etc/shadow}, que \'e \cmd{0640 root:shadow} e que eu n\~ao
+consigo abrir. Um editor de texto n\~ao precisa, porque escreve ficheiros que o
+utilizador j\'a possui.
+
+Se o \cmd{passwd} mantivesse o euid 0 durante toda a execu\c{c}\~ao, passava a ser um
+processo root que l\^e input: qualquer falha ao tratar um argumento, uma vari\'avel de
+ambiente ou um ficheiro de configura\c{c}\~ao dava c\'odigo a correr como root. O
+privil\'egio deve durar s\'o o tempo da opera\c{c}\~ao que o precisa.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 2}
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize]
+$ find / -perm -4000 -type f 2>/dev/null | sort
+/usr/bin/chfn
+/usr/bin/chsh
+/usr/bin/fusermount3
+/usr/bin/gpasswd
+/usr/bin/mount
+/usr/bin/newgrp
+/usr/bin/passwd
+/usr/bin/su
+/usr/bin/sudo
+/usr/bin/umount
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/openssh/ssh-keysign
+/usr/lib/polkit-1/polkit-agent-helper-1
+/usr/local/bin/backup-tool
+\end{lstlisting}
+
+O \cmd{find / -perm -2000} deu mais oito setgid: \cmd{chage}, \cmd{crontab},
+\cmd{expiry}, \cmd{ssh-agent}, \cmd{utempter}, \cmd{w3mimgdisplay},
+\cmd{pam\_extrausers\_chkpwd} e \cmd{unix\_chkpwd}. S\~ao todos do sistema.
+
+\begin{answer}{2a.}
+Um bin\'ario setuid \'e um design smell porque d\'a privil\'egio a quem o executa, e esse
+privil\'egio tem de ser justificado um a um --- n\~ao se assume. Os bin\'arios da
+distribui\c{c}\~ao j\'a foram escritos para isso e s\~ao revistos e actualizados pelo
+gestor de pacotes. Um bin\'ario local como o \cmd{backup-tool} n\~ao: ningu\'em o reviu,
+n\~ao tem vers\~ao nem origem, e \'e um \cmd{cp} com euid 0, logo aceita dois caminhos
+quaisquer.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 3}
+
+\begin{lstlisting}
+$ /usr/local/bin/backup-tool /etc/hostname /tmp/hn && cat /tmp/hn
+ssc-lab
+
+$ cat /etc/shadow
+cat: /etc/shadow: Permission denied
+
+$ /usr/local/bin/backup-tool /etc/shadow /tmp/leak; echo "rc=$?"
+rc=0
+$ head -2 /tmp/leak
+root:*:20679:0:99999:7:::
+daemon:*:20679:0:99999:7:::
+
+$ printf 'planted-by-svc-report\n' > /tmp/payload
+$ /usr/local/bin/backup-tool /tmp/payload /root/pwned.txt; echo "rc=$?"
+rc=0
+$ sudo cat /root/pwned.txt
+planted-by-svc-report
+\end{lstlisting}
+
+\begin{answer}{3a.}
+Usei a via de \textbf{leitura}: n\~ao consigo ler \file{/etc/shadow}, mas o
+\cmd{backup-tool} copia-o para \file{/tmp/leak} e eu leio a c\'opia. A outra via \'e a de
+\textbf{escrita}: a ferramenta escreve em qualquer s\'itio onde o root escreva, por isso
+posso p\^or um ficheiro em \file{/root} (\cmd{pwned.txt}) ou, pior, uma chave em
+\file{/root/.ssh/authorized\_keys} ou um bin\'ario que o root execute.
+
+(A c\'opia do \cmd{shadow} fica leg\'ivel porque o \cmd{cp} mant\'em o modo da origem,
+\cmd{0640}, e usa o gid do meu processo. Com a host key, que \'e \cmd{0600}, a c\'opia
+sai ileg\'ivel --- o que muda \'e o modo do ficheiro original, n\~ao o privil\'egio.)
+\end{answer}
+
+\begin{answer}{3b.}
+A c\'opia correu com \textbf{euid 0}: o \cmd{execve} p\^os o effective UID a root e a
+ferramenta nunca o baixou. O kernel fez a verifica\c{c}\~ao de permiss\~ao do
+\file{/etc/shadow} contra essa identidade efectiva e deixou passar, mesmo o real UID a
+ser o de \cmd{svc-report}.
+
+O que me deu root-equival\^encia foi a combina\c{c}\~ao de duas coisas: o privil\'egio
+fica ligado durante toda a execu\c{c}\~ao (n\~ao h\'a altura em que o baixe) e os
+argumentos s\~ao meus (origem e destino \`a escolha). Um \cmd{cp} como root \'e um
+\cmd{cat} e um \cmd{tee} como root.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 4}
+
+\begin{lstlisting}
+$ sudo cat /etc/sudoers.d/svc-report
+svc-report ALL=(ALL) NOPASSWD: /usr/bin/find
+
+$ sudo -ln                      # como svc-report
+User svc-report may run the following commands on ssc-lab:
+    (ALL) NOPASSWD: /usr/bin/find
+
+$ sudo find /etc/hostname -exec id \;
+uid=0(root) gid=0(root) groups=0(root)
+\end{lstlisting}
+
+\begin{answer}{4a.}
+O \cmd{find} tem \cmd{-exec}, que corre um comando por cada ficheiro que encontra, e como
+o \cmd{sudo} o lan\c{c}a como root, esse comando tamb\'em corre como root:
+\cmd{-exec /bin/sh \;} dava-me uma shell root. A classe do erro \'e um comando permitido
+que consegue executar outros programas (\emph{shell escape}) --- o que est\'a no GTFOBins
+para o \cmd{find}, o \cmd{vi}, o \cmd{tar}, o \cmd{awk}.
+\end{answer}
+
+\begin{answer}{4b.}
+Permitir um comando s\'o \'e dar um poder limitado se esse comando n\~ao conseguir passar
+o privil\'egio a outro programa. Ou seja: n\~ao pode lan\c{c}ar comandos (\cmd{-exec}),
+n\~ao pode interpretar linguagem (shell, \cmd{awk}, \cmd{sed}), n\~ao pode ler e escrever
+ficheiros \`a escolha e n\~ao pode carregar c\'odigo do ambiente (\cmd{PYTHONPATH},
+\cmd{LD\_PRELOAD}). Se tiver qualquer uma dessas capacidades, o direito de correr o
+comando passa a valer tudo o que o comando alcan\c{c}a.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 5}
+
+\begin{lstlisting}
+$ sudo chmod u-s /usr/local/bin/backup-tool
+$ /usr/local/bin/backup-tool /etc/shadow /tmp/leak2
+/usr/local/bin/backup-tool: cannot open '/etc/shadow' for reading:
+Permission denied
+$ /usr/local/bin/backup-tool /tmp/payload /root/pwned2.txt
+/usr/local/bin/backup-tool: cannot stat '/root/pwned2.txt': Permission denied
+\end{lstlisting}
+
+\begin{answer}{5a.}
+Tirei o bit setuid com \cmd{chmod u-s}, que \'e aplicar o menor privil\'egio: a
+ferramenta n\~ao mostrou precisar de root, por isso passa a correr como eu. As duas
+escaladas do Exerc\'icio 3 deixam de funcionar --- a leitura d\'a \cmd{Permission denied}
+e a escrita tamb\'em. O que perdi foi a capacidade de copiar ficheiros de outros donos,
+que era exactamente o excesso; copiar os ficheiros do servi\c{c}o continua a dar.
+\end{answer}
+
+\begin{answer}{5b.}
+Medi as duas capabilities depois de tirar o setuid:
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.36\linewidth} X X@{}}
+\toprule
+\textbf{grant} & \textbf{c\'opia do \file{/etc/shadow}} & \textbf{escrita em \file{/root/}} \\
+\midrule
+\cmd{cap\_dac\_read\_search+ep} & sucede & falha \\
+\cmd{cap\_dac\_override+ep} & sucede & sucede \\
+nenhuma (\cmd{setcap -r}) & falha & falha \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Fiquei com \cmd{cap\_dac\_read\_search}, que foi o que bastou para a leitura continuar a
+funcionar. A escrita ficou fechada, mas o buraco principal n\~ao: fechei s\'o parte.
+\end{answer}
+
+\begin{answer}{5c.}
+Para ``uma capability em vez de root'' fechar o buraco e n\~ao s\'o reduzi-lo, o poder
+que a ferramenta precisa de ter no trabalho normal tem de ser diferente do poder que o
+ataque precisa. Aqui \'e o mesmo: o trabalho do \cmd{cp} \'e ler qualquer ficheiro e
+escrev\^e-lo noutro s\'itio, e o ataque \'e ler um ficheiro que n\~ao posso ler e
+escrev\^e-lo onde n\~ao devo. A capability que o deixa trabalhar \'e a que me deixa atacar.
+
+Por isso s\'o fecham duas das tr\^es rotas: tirar o bit (5a) ou limitar os caminhos que a
+ferramenta pode tocar. Tirar o bit \'e mais barato e mais f\'acil de verificar, mas a
+ferramenta deixa de servir para ficheiros de outros donos. Limitar os caminhos mant\'em
+a ferramenta \'util, mas obriga a validar tudo em cada altera\c{c}\~ao ao c\'odigo.
+\end{answer}
+
+%==============================================================================
+\section{Exerc\'icio 6}
+
+\begin{lstlisting}
+$ sudo rm /etc/sudoers.d/svc-report
+$ sudo chgrp -R svc-report /var/log/svc-report
+$ sudo chmod -R g+rX,o-rwx /var/log/svc-report
+$ sudo visudo -c
+/etc/sudoers: parsed OK
+
+$ cat /var/log/svc-report/run.log     # como svc-report
+2026-10-28 report generated ok
+$ sudo -l -U svc-report               # do lado do root
+User svc-report is not allowed to run sudo on ssc-lab.
+\end{lstlisting}
+
+\begin{answer}{6a.}
+A escalada est\'a fechada: o \cmd{sudo -l -U} diz que o \cmd{svc-report} j\'a n\~ao pode
+correr nada, e o \cmd{sudo find} com \cmd{-exec} pede password e \'e recusado.
+
+O que o servi\c{c}o precisava era de ler os pr\'oprios logs, e para isso n\~ao precisa de
+root --- basta ser dono do grupo dos ficheiros. Ficou a ler os logs por permiss\~ao de
+grupo e nunca sai da sua identidade. Se precisasse mesmo de root, o mais seguro seria um
+script pr\'oprio com a lista de logs fixa, e n\~ao o \cmd{find} (\'e que qualquer
+\cmd{find} que aceite um caminho e \cmd{-exec} volta a ser uma shell root).
+\end{answer}
+
+%==============================================================================
+\section{Lab 7 --- capabilities: prepara\c{c}\~ao}
+
+\begin{answer}{P1.}
+Este kernel divide o root em \textbf{41} capabilities
+(\file{/proc/sys/kernel/cap_last_cap} = 40, logo bits 0 a 40); o n\'umero cresce com o
+kernel, e o valor de refer\^encia anda pelas quatro dezenas. Duas delas:
+\cmd{cap\_dac\_override}, que ignora as verifica\c{c}\~oes de permiss\~ao de leitura,
+escrita e execu\c{c}\~ao de ficheiros --- \'e a que permite a um processo de root
+escrever em \file{/root} ou ler \file{/etc/shadow}; e \cmd{cap\_net\_bind\_service},
+que autoriza fazer \emph{bind} a portas abaixo de 1024, a \'unica de que o
+\cmd{capbind} do Lab 7 precisa.
+\end{answer}
+
+\begin{answer}{P2.}
+O bit setuid p\~oe o effective UID do processo a 0 durante toda a execu\c{c}\~ao, logo
+d\'a-lhe \emph{todo} o root --- todas as capabilities e os casos especiais do uid 0 ---
+enquanto uma file capability lhe d\'a s\'o a capability nomeada e deixa o euid intacto:
+no Lab 7, a c\'opia com \cmd{cap\_net\_bind\_service+ep} ligou a :80 com
+\cmd{euid=1000} e \cmd{CapEff} s\'o com esse bit, e a c\'opia setuid ligou com
+\cmd{euid=0}.
+\end{answer}
+
+%==============================================================================
+\section{Lab 8 --- prepara\c{c}\~ao (P1, P2)}
+
+\begin{answer}{P1.}
+No Lab 6 o \cmd{backup-tool} correu com euid 0 e copiou \file{/etc/shadow} para
+\file{/tmp/leak}. O DAC verificou o modo do ficheiro (\cmd{0640 root:shadow}) contra o
+euid e os grupos do processo: como o euid era 0, o processo era o dono e a leitura
+passou --- o DAC n\~ao tem como recusar a root, \'e o que ``root'' significa. Uma
+pol\'itica MAC sobre o \cmd{backup-tool} podia t\^e-la recusado: um perfil que s\'o
+permitisse ler os caminhos do servi\c{c}o e n\~ao \file{/etc/shadow} teria negado o
+\cmd{open} mesmo com euid 0, exactamente como negou ao \cmd{lab8svc} neste lab. E
+tamb\'em teria negado a escrita em \file{/root}. O MAC n\~ao substitui o DAC: acrescenta
+uma verifica\c{c}\~ao depois dele, que o root n\~ao contorna.
+\end{answer}
+
+\begin{answer}{P2.}
+Um Gitea que eu administro: toca em reposit\'orios, LFS, avatares, tempor\'arios e
+ainda lan\c{c}a \cmd{git} e \cmd{ssh} para hooks e espelhos, portanto tem muitos
+caminhos e muitos execs, e um perfil demasiado apertado tira-o do ar. Carregava-o
+primeiro em complain para ver o que ele pede em funcionamento normal e s\'o depois
+passava a enforce. O risco que aceito \'e que, durante essa janela, o perfil n\~ao
+impede nada: se o Gitea for comprometido enquanto est\'a em complain, o acesso
+acontece e s\'o fica registado --- e o ru\'ido de muitos \cmd{ALLOWED} pode esconder
+a tentativa que interessava.
+\end{answer}
+
+%==============================================================================
+\section{Lab 8 --- AppArmor: o perfil m\'inimo (2a)}
+
+O alvo \'e uma c\'opia do \cmd{cat}, o ``leitor de relat\'orios'' cujo trabalho \'e ler um
+ficheiro, para que as leituras permitidas e recusadas sejam f\'aceis de observar:
+\cmd{sudo cp /bin/cat /usr/local/bin/lab8svc}. O perfil foi escrito \`a m\~ao, para se
+ver cada regra, e carregado em enforce:
+
+\begin{lstlisting}
+#include <tunables/global>
+/usr/local/bin/lab8svc {
+  #include <abstractions/base>
+  /usr/local/bin/lab8svc mr,
+  /etc/hostname r,
+}
+\end{lstlisting}
+
+Duas regras expl\'icitas --- o bin\'ario pode mapear-se e ler-se (\cmd{mr}) e pode ler
+\file{/etc/hostname} (\cmd{r}) --- e o \cmd{\#include <abstractions/base>}, que \'e
+pol\'itica e n\~ao coment\'ario: acrescenta o que qualquer programa precisa para arrancar
+(bibliotecas do loader, locale, \file{/dev/urandom}, escrita em \file{/dev/null} e no
+socket de log, parte de \file{/proc}). Carregado com
+\cmd{apparmor\_parser -r}, aparece como \cmd{/usr/local/bin/lab8svc (enforce)}.
+
+\textbf{Previs\~ao, antes de correr:} \file{/etc/hostname} passa, porque tem regra
+\cmd{r}; \file{/etc/shadow} \'e recusado, porque n\~ao tem regra nenhuma e o perfil est\'a
+em enforce. Correr com \cmd{sudo} n\~ao muda nada: o DAC deixa passar (root), o MAC n\~ao.
+
+\begin{lstlisting}
+$ sudo /usr/local/bin/lab8svc /etc/hostname
+ssc-lab
+exit=0
+
+$ sudo /usr/local/bin/lab8svc /etc/shadow
+/usr/local/bin/lab8svc: /etc/shadow: Permission denied
+exit=1
+\end{lstlisting}
+
+Bateu certo com a previs\~ao. Outro ficheiro que o \cmd{cat} como root l\^e e o perfil
+recusa: \file{/etc/passwd}.
+
+\begin{lstlisting}
+$ sudo cat /etc/passwd >/dev/null && echo "(root cat: OK)"
+(root cat: OK)
+$ sudo /usr/local/bin/lab8svc /etc/passwd
+/usr/local/bin/lab8svc: /etc/passwd: Permission denied
+exit=1
+\end{lstlisting}
+
+\file{abstractions/base} concede estas entradas de \file{/proc}:
+\begin{itemize}[leftmargin=1.9em]
+  \item \file{@{PROC}/sys/kernel/version}
+  \item \file{@{PROC}/sys/kernel/ngroups_max}
+  \item \file{@{PROC}/sys/kernel/cap_last_cap}
+  \item \file{@{PROC}/meminfo}, \file{@{PROC}/stat}, \file{@{PROC}/cpuinfo}
+  \item \file{@{PROC}/filesystems}
+  \item \file{@{PROC}/sys/vm/overcommit_memory}
+  \item \file{@{PROC}/@{pid}/{maps,auxv,status}}
+\end{itemize}
+Como \file{@{pid}} \'e o padr\~ao dos PIDs, \file{/proc/self/status} cai nesta
+\'ultima regra. Aberto: \file{/proc/self/status}; fechado: \file{/proc/self/mounts}.
+
+\begin{lstlisting}
+$ sudo /usr/local/bin/lab8svc /proc/self/status | head -2
+Name:	lab8svc
+Umask:	0022
+exit=0
+
+$ sudo cat /proc/self/mounts >/dev/null && echo "(root cat: OK)"
+(root cat: OK)
+$ sudo /usr/local/bin/lab8svc /proc/self/mounts
+/usr/local/bin/lab8svc: /proc/self/mounts: Permission denied
+exit=1
+\end{lstlisting}
+
+Os resultados batem certo com a lista: \file{status} est\'a no \cmd{abstractions/base},
+\file{mounts} n\~ao. \'E a diferen\c{c}a entre o que se pensa que o programa toca e o que
+a pol\'itica permite --- precisamente o que um atacante procura.
+
+%==============================================================================
+\section{Lab 8 --- MAC contra DAC e least privilege (3a, 3b)}
+
+A nega\c{c}\~ao da leitura de \file{/etc/shadow}, no audit log:
+
+\begin{lstlisting}
+type=AVC msg=audit(1794399687.541:3250): apparmor="DENIED" operation="open"
+  class="file" profile="/usr/local/bin/lab8svc" name="/etc/shadow" pid=17879
+  comm="lab8svc" requested_mask="r" denied_mask="r" fsuid=0 ouid=0
+  FSUID="root" OUID="root"
+\end{lstlisting}
+
+\begin{answer}{3a.}
+O processo de root passou todas as verifica\c{c}\~oes DAC --- corre com \cmd{fsuid=0},
+como a linha mostra --- e foi recusado \`a mesma. Um perfil AppArmor pode proibir, por
+caminho, abrir, ler, escrever, criar ou mapear ficheiros, usar capabilities, abrir
+sockets, fazer mount, fazer ptrace e executar outros programas,
+independentemente do UID. Aqui proibiu \cmd{open} de \file{/etc/shadow} a um processo
+que, no DAC, tinha todo o direito de o abrir.
+
+Isso faz do MAC um controlo de outra natureza, e n\~ao apenas permiss\~oes de ficheiro
+mais fortes: no DAC o dono do objecto decide, e o root pode sempre ignorar; no MAC a
+pol\'itica \'e do sistema, est\'a ligada ao \emph{programa} e n\~ao \`a identidade, e nem
+o root nem o dono do ficheiro a podem contornar. A pergunta deixa de ser ``quem \'e o
+utilizador?'' e passa a ser ``que programa \'e este e o que lhe foi permitido?''.
+
+O que o DAC faz bem e o MAC n\~ao substitui \'e a propriedade e a partilha de dados:
+\cmd{chmod}, \cmd{chown} e ACLs dizem quem \'e o dono de um ficheiro e com quem se
+partilha, sem exigir uma pol\'itica por programa. O MAC n\~ao exprime ``este ficheiro
+\'e do hugo'' nem resolve partilha; precisa de um perfil por bin\'ario e de o manter.
+
+Para distinguir um ficheiro de que o servi\c{c}o precisa de um a que o atacante o
+obrigou a chegar: primeiro a linha de base do comportamento normal (o que ele abre a
+fazer o seu trabalho, medido em complain); depois, a rela\c{c}\~ao com a fun\c{c}\~ao e a
+configura\c{c}\~ao do servi\c{c}o; e, por fim, a origem do caminho --- se vem de input do
+utilizador, se \'e uma travessia \cmd{../}, e em que sequ\^encia aparece. Um leitor de
+relat\'orios que abre \file{/etc/shadow} a seguir a um pedido externo n\~ao ``precisa''
+dele: foi levado l\'a.
+\end{answer}
+
+\subsection*{O passo de least privilege}
+
+Removida a regra \cmd{/etc/hostname r,} e recarregado o perfil, a leitura que antes
+passava passou a ser recusada. O perfil final tem s\'o o \cmd{abstractions/base} e a
+regra do pr\'oprio bin\'ario:
+
+\begin{lstlisting}
+#include <tunables/global>
+/usr/local/bin/lab8svc {
+  #include <abstractions/base>
+  /usr/local/bin/lab8svc mr,
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+$ sudo /usr/local/bin/lab8svc /etc/hostname
+/usr/local/bin/lab8svc: /etc/hostname: Permission denied
+exit=1
+\end{lstlisting}
+
+Removi a regra porque o trabalho de um leitor de relat\'orios n\~ao inclui
+\file{/etc/hostname}: a regra existia para a demonstra\c{c}\~ao, e cada caminho
+permitido a mais \'e superf\'icie de ataque.
+
+\begin{answer}{3b.}
+O perfil final impede o atacante de \textbf{executar outro programa}: n\~ao tem nenhuma
+regra de execu\c{c}\~ao, portanto quem tomasse o servi\c{c}o n\~ao conseguia lan\c{c}ar
+uma shell, um \cmd{cat} ou um \cmd{curl} para a segunda fase. Impede tamb\'em a leitura
+de tudo o que est\'a fora do \cmd{abstractions/base} (\file{/etc/shadow},
+\file{/etc/passwd}, chaves SSH, \file{/proc/self/mounts}) e a escrita de ficheiros ---
+s\'o \file{/dev/null} e o socket de log v\^em do base. A shell \'e a que ele quer mais:
+sem exec, o compromisso fica preso ao bin\'ario.
+\end{answer}
+
+%==============================================================================
+\section{Lab 8 --- a nega\c{c}\~ao como sinal de detec\c{c}\~ao (4a, 4b)}
+
+Feita mais uma leitura proibida, procurei-a como um defensor a procuraria. As duas
+ferramentas de primeira linha falharam: \cmd{ausearch -m AVC -ts recent} devolveu
+\cmd{<no matches>} (procura AVCs no formato do SELinux e os registos do AppArmor n\~ao
+t\^em \cmd{tclass=}), e \cmd{dmesg | grep -i apparmor} s\'o mostrou linhas
+\cmd{apparmor="STATUS"} do arranque, porque com o auditd a correr o kernel entrega os
+registos ao auditd. A nega\c{c}\~ao estava no ficheiro:
+
+\begin{lstlisting}
+$ sudo grep -a 'apparmor="DENIED"' /var/log/audit/audit.log | grep -a shadow | tail
+type=AVC msg=audit(1794399868.918:3547): apparmor="DENIED" operation="open"
+  class="file" profile="/usr/local/bin/lab8svc" name="/etc/shadow" pid=18326
+  comm="lab8svc" requested_mask="r" denied_mask="r" fsuid=0 ouid=0
+  FSUID="root" OUID="root"
+\end{lstlisting}
+
+\subsection*{4a --- nota de defensor}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.30\linewidth} X@{}}
+\toprule
+\textbf{campo} & \textbf{resposta} \\
+\midrule
+Evid\^encia (linha e valores de \cmd{apparmor}, \cmd{operation}, \cmd{profile},
+\cmd{name}, \cmd{comm}, \cmd{pid}) &
+\cmd{apparmor="DENIED"}, \cmd{operation="open"},
+\cmd{profile="/usr/local/bin/lab8svc"}, \cmd{name="/etc/shadow"},
+\cmd{comm="lab8svc"}, \cmd{pid=18326} \\
+O que foi tentado &
+O processo \cmd{lab8svc} (pid 18326, a correr com \cmd{fsuid=0}, root) tentou abrir
+\file{/etc/shadow} para leitura (\cmd{requested\_mask="r"}). \\
+O que o travou &
+O perfil \cmd{/usr/local/bin/lab8svc}, em \textbf{enforce} (confirmado em
+\file{/sys/kernel/security/apparmor/profiles}). \\
+Como o encontrei &
+\cmd{ausearch -m AVC -ts recent} n\~ao deu nada; \cmd{dmesg | grep -i apparmor} s\'o
+tinha STATUS do arranque; funcionou
+\cmd{grep -a 'apparmor="DENIED"'} no \file{/var/log/audit/audit.log}. \\
+O que a linha n\~ao diz &
+Porqu\^e nem quem o mandou fazer: n\~ao tem linha de comando, processo pai, sess\~ao do
+utilizador, nem o pedido externo que levou a isto; n\~ao diz se era ataque ou erro de
+configura\c{c}\~ao, nem o que aconteceu antes ou depois, nem quantas tentativas houve
+noutros caminhos. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Antes de um incidente, para verificar que a ferramenta em que penso confiar mostra mesmo
+este tipo de evento, provocava uma nega\c{c}\~ao conhecida --- correr o bin\'ario
+confinado contra um ficheiro que o perfil n\~ao permite --- e confirmava que a ferramenta
+mostra essa linha com o evento garantido, e que uma resposta vazia quer dizer ``n\~ao
+houve evento'' e n\~ao ``a ferramenta n\~ao v\^e isto''. Com o \cmd{ausearch} teria
+descoberto logo que ele n\~ao v\^e AppArmor.
+
+\begin{answer}{4b.}
+Em \textbf{enforce} ganho a preven\c{c}\~ao --- a leitura foi parada, o dado n\~ao saiu
+--- e perco a observa\c{c}\~ao do que o atacante faria a seguir; o log diz \cmd{DENIED} e
+nada mais. Em \textbf{complain} ganho a observa\c{c}\~ao completa (o acesso aconteceu e
+ficou registado como \cmd{ALLOWED}, com o \cmd{denied\_mask} que teria sido aplicado) e
+perco o controlo: o dado foi lido, o dano \'e real.
+
+S\~ao precisos os dois porque s\~ao metades diferentes do mesmo trabalho: o controlo que
+bloqueia impede o dano mas n\~ao me diz que estou a ser atacado; o log diz-me que estou a
+ser atacado mas, sem o controlo, s\'o depois do dano. Um SIEM ou uma pessoa que l\^e o
+log precisa do registo; a pol\'itica precisa de bloquear. Al\'em disso, os \cmd{DENIED}
+s\~ao o que permite afinar o perfil e o que serve de evid\^encia depois --- e um ataque
+que falha tamb\'em \'e informa\c{c}\~ao: diz que algu\'em est\'a a tentar.
+\end{answer}
+
+%==============================================================================
+\section{Lab 8 --- a vista cross-platform (5)}
+
+Os dois casos medidos --- o \cmd{lab8svc} impedido de ler \file{/etc/shadow} e a regra
+para \file{/bin/cat} que deixou de casar --- vistos por quatro mecanismos equivalentes:
+
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{SELinux (type enforcement, por label).} Cada processo corre num
+  dom\'inio e cada ficheiro tem um tipo; a pol\'itica diz que o dom\'inio do
+  \cmd{lab8svc} n\~ao pode ler \file{shadow_t}. A leitura \'e negada com \cmd{EACCES} e
+  registada como AVC --- com o \cmd{tclass=file} que o \cmd{ausearch} procura e que os
+  registos do AppArmor n\~ao t\^em. Quem escreve a restri\c{c}\~ao \'e o
+  administrador/distribui\c{c}\~ao, em m\'odulos de pol\'itica compilados; o processo
+  n\~ao muda o seu label. O problema do 3d-ii n\~ao acontece: o controlo \'e sobre o
+  inode, por isso \file{/bin/cat} e \file{/usr/bin/cat}, sendo o mesmo ficheiro, t\^em o
+  mesmo label e o nome usado para l\'a chegar \'e irrelevante. O que falha \'e um label
+  errado, n\~ao um caminho.
+
+  \item \textbf{FreeBSD jails (namespace).} O jail d\'a ao processo uma vista do sistema
+  de ficheiros: s\'o existe a sub\'arvore que o administrador montou como raiz do jail,
+  e o \file{/etc/shadow} do host n\~ao l\'a est\'a. Se o jail tiver o seu pr\'oprio
+  \file{/etc/shadow}, um root dentro do jail pode l\^e-lo: o jail limita o que \'e
+  vis\'ivel, n\~ao o que root faz dentro do vis\'ivel. Quem escreve \'e o administrador
+  (configura\c{c}\~ao do jail, mounts, par\^ametros \cmd{allow.*}). O 3d-ii n\~ao se
+  aplica da mesma maneira: n\~ao h\'a regras por caminho a casar, e um symlink dentro do
+  jail resolve-se dentro da raiz do jail --- o risco est\'a num mount que exponha o que
+  n\~ao devia.
+
+  \item \textbf{OpenBSD pledge/unveil (auto-restri\c{c}\~ao).} O pr\'oprio programa
+  declara as paths que quer ver e as classes de syscalls que quer usar: um \cmd{cat} com
+  \cmd{unveil("/etc/hostname","r")} e \cmd{pledge("stdio rpath")} n\~ao abre
+  \file{/etc/shadow} --- a path n\~ao foi unveilada e o kernel responde
+  \cmd{ENOENT}/\cmd{EACCES} --- e as syscalls fora da promessa s\~ao bloqueadas. Quem
+  escreve \'e o programador, n\~ao o administrador. O problema do 3d-ii pode acontecer,
+  porque unveil tamb\'em \'e por nome: mas \'e o programa que unveila o caminho que vai
+  abrir e depois fecha a lista (\cmd{unveil(NULL,NULL)}), pelo que o erro \'e do c\'odigo
+  e n\~ao de um parser silencioso.
+
+  \item \textbf{Windows (integrity levels e tokens).} O token do processo carrega o
+  integrity level (low/medium/high/system) e os privil\'egios, e cada objecto tem um
+  security descriptor e um label de integridade. O SAM s\'o \'e acess\'ivel a SYSTEM
+  pela DACL, por isso um processo medium n\~ao o abre; al\'em disso o MIC imp\~oe
+  \emph{no-write-up} (um low n\~ao escreve num medium/high), embora a leitura para cima
+  seja em geral permitida. Quem escreve \'e o administrador/SO (ACLs e labels), com o
+  manifesto da aplica\c{c}\~ao a declarar capabilities. O 3d-ii n\~ao acontece: a
+  decis\~ao \'e sobre o objecto (descriptor), n\~ao sobre o nome --- os dois caminhos do
+  \cmd{cat} seriam o mesmo objecto com o mesmo descriptor.
+\end{itemize}
+
+\textbf{A ideia comum.} Os cinco --- AppArmor inclu\'ido --- tiram a decis\~ao de
+``quem \'e o utilizador'' e p\~oem-na numa pol\'itica que o processo n\~ao pode
+reescrever: o perfil do programa, o label do inode, a vista do namespace, as promessas
+que o programa se imp\^os, ou o token e o integrity level. \'E o monitor de
+refer\^encia: media\c{c}\~ao completa, \`a prova de manipula\c{c}\~ao pelo sujeito, e
+pequeno o suficiente para se poder verificar.
+
+\textbf{O que o modelo por caminho do AppArmor torna f\'acil e fr\'agil.} F\'acil:
+escreve-se na linguagem em que o administrador pensa (caminhos), por programa, sem
+relabelar o sistema e sem tocar no c\'odigo; um perfil de vinte linhas l\^e-se todo. E
+foi por isso que aqui se viu logo o que estava permitido e o que n\~ao. Fr\'agil: o
+caminho \'e a identidade do objecto, e o mesmo ficheiro tem v\'arios nomes --- symlinks,
+hardlinks, bind mounts, renomea\c{c}\~oes, chroot e namespaces de mount. A regra para
+\file{/bin/cat} n\~ao casou com \file{/usr/bin/cat} e o parser n\~ao disse nada; o mesmo
+pode acontecer com \file{/bin/sh} ou com um caminho que muda depois de o perfil ser
+escrito. O SELinux evita isto ao colar o label ao inode uma vez; o AppArmor paga a
+legibilidade com essa manuten\c{c}\~ao.
+
+%==============================================================================
+\appendix
+\section{Reflex\~ao --- Lab 6: setuid e sudo}
+
+\begin{callout}{Setuid e sudo (200--300 palavras)}
+\setlength{\parskip}{5pt}%
+Os dois mecanismos resolvem o mesmo problema de maneira diferente: o setuid d\'a o
+privil\'egio ao \emph{bin\'ario}, o sudo d\'a-o por \emph{pol\'itica}. O setuid \'e local e
+n\~ao se v\^e --- o privil\'egio est\'a no bit do ficheiro e s\'o o encontro com
+\cmd{find -perm -4000}. O sudo \'e escrito e lista-se com \cmd{sudo -l}, mas o que ele
+d\'a \'e o poder do programa permitido, n\~ao o que a regra queria dizer: o \cmd{find} com
+\cmd{-exec} \'e uma shell root disfar\c{c}ada de pesquisa de logs.
+
+Achei o setuid mais f\'acil de pensar, porque a lista de bin\'arios \'e curta e n\~ao muda.
+O sudo foi mais f\'acil de explorar: n\~ao tive de descobrir nada, bastou ler o
+\file{/etc/sudoers.d} e ver o que o \cmd{find} sabe fazer.
+
+Nos dois casos o kernel n\~ao tinha nenhum bug --- o problema foi usar bem duas coisas
+mal configuradas, como no Lab 1 com o script do cron e no Lab 5 com o
+\cmd{ForwardAgent}. Acho que o operador deve olhar para o que corre, em nome de quem, e
+para o que esse programa consegue fazer; ao rever o sudoers a pergunta n\~ao \'e ``que
+comando \'e este'' mas ``o que \'e que este comando pode executar''.
+
+No capstone come\c{c}ava pela regra de sudo, porque \'e uma linha, n\~ao obriga a mexer em
+bin\'arios e fecha logo a via mais f\'acil. O setuid ficava para depois.
+\end{callout}
+
+%==============================================================================
+\section{Reflex\~ao --- Lab 7: capabilities}
+
+\begin{callout}{Capabilities (200--300 palavras)}
+\setlength{\parskip}{5pt}%
+O setuid continua em todo o lado porque custa um bit: \cmd{chmod u+s} e o programa de
+root cl\'assico funciona, sem saber nada de capabilities. As capabilities pedem mais
+--- o bin\'ario tem de ser revisto para declarar s\'o o que precisa, o \cmd{setcap}
+passa a fazer parte do empacotamento e do build, e o \cmd{+e} mal posto faz o
+\cmd{execve} falhar com EPERM (Ex.~6). Pior, um programa antigo que baixa privil\'egios
+com \cmd{setuid(getuid())} n\~ao foi escrito para viver com capabilities, e o que era um
+\cmd{chmod} passa a ser uma decis\~ao de arquitectura. A ideia \'e simples; a
+adop\c{c}\~ao \'e que n\~ao \'e.
+
+Vi duas maneiras de a restri\c{c}\~ao cair: o \cmd{-{}-privileged} devolve as 41
+capabilities, e o sysctl do Docker p\~oe a porta 80 fora do gate. A generaliza\c{c}\~ao
+\'e que a capability \'e uma condi\c{c}\~ao, n\~ao a pol\'itica. O kernel decide com o
+\cmd{CapEff}, mas tamb\'em com o \cmd{CapBnd}, com as file capabilities da imagem, com
+o sysctl, com o seccomp e com os namespaces. ``Tirei a capability perigosa'' fala de
+uma pe\c{c}a; a ac\c{c}\~ao perigosa pode continuar poss\'ivel por outra via --- a porta
+deixa de ser privilegiada, o device aparece no \file{/dev}, o bin\'ario traz a
+capability. \'E a li\c{c}\~ao do Lab 6 outra vez: o mecanismo n\~ao \'e a garantia.
+
+No capstone, das capabilities que nomeei no Ex.~3a, come\c{c}ava por
+\cmd{cap\_sys\_admin} e tirava-a primeiro: \'e a que transforma ``root dentro do
+contentor'' em root do host, porque permite montar o disco do host e manipular cgroups
+e namespaces. Verificava lendo os conjuntos dentro do contentor
+(\cmd{grep Cap /proc/self/status}) e descodificando com \cmd{capsh -{}-decode}: o bit 21
+n\~ao pode estar no \cmd{CapEff} nem no \cmd{CapBnd}, e a prova final \'e tentar o
+\cmd{mount} e v\^e-lo falhar.
+\end{callout}
+
+%==============================================================================
+\section{Reflex\~ao --- Lab 8: AppArmor}
+
+\begin{callout}{AppArmor e o sinal de detec\c{c}\~ao (200--300 palavras)}
+\setlength{\parskip}{5pt}%
+A nega\c{c}\~ao \'e o mesmo registo que usei para afinar o perfil e para detectar o
+ataque. Se aplicar o perfil em enforce e nunca ler o log, ganho a preven\c{c}\~ao e perco
+tudo o resto: n\~ao sei que estou a ser sondado nem tenho evid\^encia para responder. O
+ataque fica invis\'ivel precisamente por ter falhado, e quem insiste noutro caminho
+continua a n\~ao ser visto. O log \'e o que transforma bloqueios isolados numa s\'erie de
+tentativas.
+
+O modelo por caminho falha quando o caminho n\~ao \'e a identidade: symlinks, hardlinks,
+bind mounts e renames fazem o mesmo ficheiro aparecer com outro nome, e a regra deixa de
+casar --- foi o que aconteceu com \file{/bin/cat} e \file{/usr/bin/cat}, sem o parser
+dizer nada. Um atacante pode criar um caminho novo para um alvo permitido, e a regra
+escrita para o nome antigo n\~ao dispara. O SELinux cola o label ao inode: o nome n\~ao
+muda a decis\~ao e um ficheiro movido mant\'em o tipo; o custo \'e manter labels e
+relabelar.
+
+Capstone, um passo que n\~ao o 4a: a leitura de \file{/etc/shadow} em complain (3c). O
+\cmd{lab8svc} a correr como root abre e l\^e o ficheiro (\cmd{exit=0}); o registo \'e um
+AVC \cmd{apparmor="ALLOWED"}, \cmd{operation="open"}, com perfil, \file{name}, \cmd{pid},
+\cmd{comm}, \cmd{fsuid=0} e \cmd{denied\_mask="r"}. S\'o com esse registo, um defensor
+distingue-o de uma ac\c{c}\~ao leg\'itima? N\~ao: diz que o leitor abriu o shadow, o que
+\'e suspeito, mas \'e igual quer venha de um atacante quer de um trabalho mal
+configurado --- falta actor, linha de comando e inten\c{c}\~ao. S\'o correlacionando com
+a linha de base e com o pedido anterior.
+\end{callout}
+
+\end{document}

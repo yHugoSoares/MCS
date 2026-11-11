@@ -1,0 +1,188 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{enumitem}
+\usepackage{verbatim}
+
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue}
+\setlist{noitemsep,topsep=3pt}
+
+\title{Segurança de Dados\\\large Assignment 2 -- Classical Cryptographic Schemes}
+\author{Hugo Soares}
+\date{8 de outubro de 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Questão 1}
+
+Foi implementado um ataque a uma cifra monoalfabética utilizando o texto cifrado
+\texttt{Q1\_ciphertext.txt}. O texto original está escrito em português e todos os
+caracteres que não pertencem ao alfabeto latino foram removidos, conforme indicado
+no enunciado.
+
+\subsection*{Método utilizado}
+
+Foi seguido um procedimento manual, apoiado por um programa simples. O
+programa \texttt{monoalphabetic\_attack.py} não procura automaticamente a
+chave: apenas conta as letras do texto, aplica as correspondências que foram
+deduzidas e mostra o resultado parcial.
+
+O primeiro passo foi remover os caracteres que não pertencem ao alfabeto
+\texttt{A--Z} e contar as ocorrências de cada letra. A percentagem de uma letra
+\texttt{x} foi calculada por:
+
+\[
+\mathrm{freq}(x) =
+\frac{\mathrm{ocorrencias}(x)}
+{\mathrm{numero\ total\ de\ letras}}\times 100.
+\]
+
+As letras mais frequentes encontradas no texto cifrado foram:
+
+\begin{center}
+\begin{tabular}{c|c|c}
+\textbf{Letra cifrada} & \textbf{Ocorrências} & \textbf{Percentagem}\\
+\midrule
+\texttt{I} & 322 & 14,25\%\\
+\texttt{J} & 298 & 13,19\%\\
+\texttt{K} & 249 & 11,02\%\\
+\texttt{T} & 172 & 7,61\%\\
+\texttt{Z} & 151 & 6,68\%\\
+\end{tabular}
+\end{center}
+
+Estas frequências foram comparadas com as frequências esperadas das letras em
+português. Como a cifra é monoalfabética, a letra mais frequente do texto
+cifrado é uma candidata à letra mais frequente do português. Esta comparação
+não foi considerada suficiente por si só, porque frequências próximas podem
+corresponder a letras diferentes num texto específico.
+
+As hipóteses foram, por isso, verificadas através de digramas, trigramas e do
+contexto. Por exemplo, o início do texto cifrado é:
+
+\begin{verbatim}
+JTJZHJTIKTCJZKI...
+\end{verbatim}
+
+Ao testar que \texttt{JTJ} correspondia a \texttt{ASA}, obtive:
+
+\begin{verbatim}
+JTJZHJTIKT
+ASARCASEOS
+\end{verbatim}
+
+Esta hipótese produz uma sequência compatível com o início de
+\textit{Os Lusíadas}, ``AS ARMAS E OS...''. A partir desta observação foram
+registadas as correspondências \texttt{J--A} e \texttt{T--S}. As letras
+seguintes foram deduzidas de forma semelhante e confirmadas sempre que
+apareciam noutras posições do texto.
+
+O programa executa apenas os seguintes passos:
+\begin{enumerate}
+\item lê o ficheiro, converte o conteúdo para maiúsculas e mantém apenas letras
+      entre \texttt{A} e \texttt{Z};
+\item mostra a contagem e a percentagem de cada letra;
+\item aplica a tabela \texttt{CHAVE}, que foi preenchida manualmente; e
+\item grava o texto claro em \texttt{Q1\_plaintext.txt}, quando é indicado um
+      segundo argumento.
+\end{enumerate}
+
+As tabelas de digramas e trigramas fornecidas no enunciado foram usadas como
+referência durante esta análise. A frequência de letras serviu para propor
+correspondências iniciais; os digramas e trigramas serviram para testar se essas
+correspondências eram plausíveis. Uma correspondência só foi mantida quando
+produzia sequências coerentes e respeitava a regra de que letras cifradas
+diferentes devem corresponder a letras claras diferentes.
+
+\subsection*{Chave e permutação descobertas}
+
+Comparando o texto cifrado com o texto claro obtido, a permutação usada na
+decifragem é:
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{>{\ttfamily}c>{\ttfamily}c@{\quad} >{\ttfamily}c>{\ttfamily}c@{\quad} >{\ttfamily}c>{\ttfamily}c@{\quad} >{\ttfamily}c>{\ttfamily}c}
+\toprule
+\textbf{Cifrado} & \textbf{Claro} & \textbf{Cifrado} & \textbf{Claro} &
+\textbf{Cifrado} & \textbf{Claro} & \textbf{Cifrado} & \textbf{Claro} \\
+\midrule
+A & J & B & C & C & B & D & P \\
+E & I & F & Q & G & L & H & M \\
+I & E & J & A & K & O & L & G \\
+M & H & P & D & Q & F & R & X \\
+S & T & T & S & U & V & V & U \\
+W & Z & Y & N & Z & R & & \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+As letras \texttt{n}, \texttt{o} e \texttt{x} não aparecem no texto cifrado, pelo
+que a sua correspondência não pode ser inferida a partir desta instância. Para
+as letras presentes, o mapeamento é consistente e bijetivo. O texto contém
+2259 letras, tanto no ficheiro cifrado como no ficheiro claro.
+
+\subsection*{Resultado}
+
+O início do texto claro recuperado é:
+
+\begin{verbatim}
+AS ARMAS E OS BAROES ASSINALADOS QUE DA OCIDENTAL PRAIA LUSITANA
+\end{verbatim}
+
+Depois de reintroduzir os espaços apenas para leitura, este trecho corresponde
+ao início de \textit{Os Lusíadas}, de Luís de Camões. O resultado completo é
+mantido no ficheiro \texttt{Q1\_plaintext.txt}; como o enunciado pede que os
+espaços e caracteres especiais sejam removidos, o ficheiro contém a versão
+contínua em maiúsculas.
+
+O programa pode ser executado a partir da pasta \texttt{SD} com:
+
+\begin{verbatim}
+python3 Aula2/monoalphabetic_attack.py \
+    Aula2/Q1_ciphertext.txt Aula2/Q1_plaintext.txt
+\end{verbatim}
+
+\section*{Questão 2}
+
+O enunciado pede a implementação de um ataque a uma cifra de Vigenère,
+recebendo o tamanho da chave, o caminho do texto cifrado e uma lista de palavras
+que possam ocorrer no texto claro. Também pede a utilização de uma chave de
+tamanho quatro sobre o ficheiro \texttt{Q2\_ciphertext.txt}.
+
+Na versão fornecida da pasta da aula, esse ficheiro não está presente e também
+não existe um programa \texttt{vigenere\_attack.py}. Assim, não é possível
+produzir de forma verificável a chave, o texto claro ou os resultados
+experimentais da Questão 2. Para completar esta parte, seria necessário
+adicionar o ficheiro de entrada e implementar o ataque descrito no enunciado.
+
+\subsection*{Ataque esperado}
+
+Para cada uma das quatro posições da chave, devem ser extraídos os caracteres
+do texto cifrado nessa posição. Cada sequência é uma cifra de César
+independente. A hipótese de deslocamento de cada posição pode ser testada
+decifrando as sequências e verificando se o texto reconstruído contém pelo
+menos uma das palavras \texttt{DIREITO}, \texttt{FANTASIA},
+\texttt{LIBERDADE}, \texttt{MUNDO}, \texttt{QUE} ou
+\texttt{INTERVENCAO}. Quando uma combinação satisfizer essa condição, o
+programa deve imprimir a chave na primeira linha e o texto claro completo na
+segunda linha.
+
+\section*{Conclusão}
+
+A Questão 1 foi resolvida manualmente. A frequência das letras permitiu
+estabelecer as primeiras hipóteses através da comparação com a frequência
+esperada em português. Essas hipóteses foram confirmadas ou rejeitadas através
+de digramas, trigramas e do contexto das sequências obtidas. O programa foi
+mantido simples para tornar explícito o raciocínio: a chave está escrita no
+código e o programa apenas aplica a substituição escolhida. O resultado obtido
+é coerente com o início de \textit{Os Lusíadas}. A Questão 2 fica pendente por
+falta dos ficheiros necessários na pasta fornecida.
+
+\end{document}
