@@ -24,7 +24,7 @@ Every course follows the same convention (not every course uses every folder):
 | `labs/`        | Practical lab work: statements, code, logs, notes            |
 | `guides/`      | Lab guides handed out by the course                          |
 | `reports/`     | Written deliverables (sources + compiled PDF)                |
-| `project/`     | Larger project work                                          |
+| *submodule*    | Larger project work (own git repo, linked in place)          |
 
 Each course has its own `README.md` with the deliverables, dates and build instructions.
 
@@ -40,7 +40,7 @@ Each course has its own `README.md` with the deliverables, dates and build instr
 
 - **Theoretical PDFs** live in each course's `theory/` folder. The folders exist; the
   SR and SSC slides have not been added yet.
-- **`year-1/semester-1/SD/project/sd2627` is a git submodule** pointing at
+- **`year-1/semester-1/SD/sd2627` is a git submodule** pointing at
   [marcosevegrand/sd2627](https://github.com/marcosevegrand/sd2627). Clone with:
 
   ```sh

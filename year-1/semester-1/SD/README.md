@@ -11,7 +11,7 @@ ciphers, stream ciphers, block ciphers and modes of operation, then a group proj
 ```text
 theory/         lecture slides
 assignments/    five graded assignments
-project/        sd2627 — group project (git submodule)
+sd2627/         group project (git submodule)
 ```
 
 ## Assignments
@@ -39,13 +39,13 @@ pdflatex report.tex
 
 ## Project
 
-`project/sd2627` is a **git submodule** for
+`sd2627` is a **git submodule** for
 [marcosevegrand/sd2627](https://github.com/marcosevegrand/sd2627) — a privacy-preserving
 incident-sharing platform for network-operator federations (Go, zk-SNARKs).
 
 ```sh
 git submodule update --init --recursive
-cd project/sd2627 && make help
+cd sd2627 && make help
 ```
 
 Its own `README.md` and `docs/` cover the architecture and the plan.
