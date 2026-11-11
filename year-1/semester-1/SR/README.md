@@ -8,7 +8,7 @@ Hands-on network attacks and defences, run against a local VM lab
 ## Contents
 
 ```text
-theory/                     lecture slides (not added yet)
+theory/                     lecture slides
 labs/
 ├── tp1-packet-sniffing/    TP1 — Packet Sniffing and Spoofing (6h)
 ├── tp2-tcp-attacks/        TP2 — TCP Attacks (4h)
@@ -42,7 +42,7 @@ them with real screenshots.
 
 ## Theory
 
-`theory/Aulas Teóricas/` holds the seven lecture decks:
+`theory/` holds the seven lecture decks:
 
 - `SR2627_0_Apresentação_v02` — course presentation
 - `NetSecurity01` — Introduction, Threats and Attacks

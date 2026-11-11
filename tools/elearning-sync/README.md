@@ -52,19 +52,32 @@ Existing files with the same size are skipped, so re-running is cheap.
 
 ## What goes where
 
-| Course | Destination |
-| ------ | ----------- |
-| Segurança de Dados | `year-1/semester-1/SD/theory/` |
-| Segurança de Redes | `year-1/semester-1/SR/theory/` |
-| Segurança de Sistemas de Computação | `year-1/semester-1/SSC/theory/` |
-| anything else | `materials/<slug>/theory/` |
+The script learns the layout from the repo instead of hard-coding paths:
+
+1. It scans `year-*/semester-*/` for course folders.
+2. It matches each Blackboard course to a folder by acronym — `Segurança de Dados` → `SD`,
+   `Segurança de Redes` → `SR`, `Segurança de Sistemas de Computação [MC]` → `SSC`.
+3. It routes each PDF by its title into the folders that course already has:
+
+| Item | Destination |
+| ---- | ----------- |
+| Lecture decks (`Lecture 3: …`, `00 DS Presentation.pdf`, `NetSecurity-01: …`) | `<course>/theory/`, flat |
+| Lab guides (`Lab 3: …`) | `<course>/guides/` if it exists, else `<course>/labs/` |
+| Assignment sheets (`Assignment 2`, `Ficha 3`) | `<course>/assignments/` |
+| Anything unrecognised | `<course>/theory/` |
 
 Only `resource/x-bb-file` items with `mimeType: application/pdf` are downloaded. Ultra
 documents (lab statements written in the page editor) and ZIPs are ignored — grab those by
 hand if you need them.
 
-Because the whole outline is mirrored, lab guides that happen to be PDFs land in `theory/`
-too, inside their original block folder. Prune or move them as you like.
+Duplicates are never created:
+
+- a file that already exists with the same size is skipped;
+- a lab guide is skipped when `guides/` already has a PDF for that lab number, whatever
+  its name (`Lab 3` matches `03 - PAM and the Authentication Stack.pdf`);
+- content is compared by hash before writing, so a re-download under a new name is caught.
+
+That means a second run on an unchanged course prints `0 downloaded, N unchanged`.
 
 ## Notes
 

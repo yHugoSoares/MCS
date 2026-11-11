@@ -9,7 +9,7 @@ certificates and hardening, privilege escalation (setuid/sudo, capabilities) and
 ## Contents
 
 ```text
-theory/     lecture slides (not added yet)
+theory/     lecture slides
 guides/     the course guide set: 00-05 + labs 06-08
 labs/       per-lab notes and logs
 reports/    the three written deliverables (LaTeX sources + PDF)
@@ -55,14 +55,17 @@ the build must run from `reports/` (the `Makefile` already does that).
 
 ## Theory
 
-`theory/` mirrors the course outline, so the lectures and the lab guides sit together in
-their block folders:
+`theory/` holds the eight lecture decks plus the Week 0 introduction, flat:
 
-| Folder | Contents |
-| ------ | -------- |
-| `Start Here/` | Week 0: Getting Ready |
-| `Block 1: Threat Modelling and Attack Surface/` | Lectures 1–2, Labs 1–2 |
-| `Block 2: Authentication and Authorisation/` | Lectures 3–5, Labs 3–5 |
-| `Block 3: The Unix Privilege Model, Capabilities and MAC/` | Lectures 6–8, Labs 6–8 |
+- `week-0-getting-ready`
+- `lecture-01-foundations-of-systems-security`
+- `lecture-02-threat-modelling-in-practice`
+- `lecture-03-authentication-nss-and-pam`
+- `lecture-04-federated-identity`
+- `lecture-05-authorisation-and-ssh`
+- `lecture-06-privilege-setuid-and-sudo`
+- `lecture-07-linux-capabilities`
+- `lecture-08-mandatory-access-control-and-detection`
 
-17 PDFs in total. Re-sync with `python3 tools/elearning-sync/sync.py --course SSC`.
+The lab guides live in [`guides/`](#guides); the sync script skips them because they are
+already there. Re-sync with `python3 tools/elearning-sync/sync.py --course SSC`.

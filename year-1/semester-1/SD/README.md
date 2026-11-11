@@ -52,7 +52,7 @@ Its own `README.md` and `docs/` cover the architecture and the plan.
 
 ## Theory
 
-`theory/Slides/` holds the eight lecture decks, mirrored from eLearning:
+`theory/` holds the eight lecture decks, mirrored from eLearning:
 
 - `00 DS Presentation`
 - `01 DS Introduction and Concepts`

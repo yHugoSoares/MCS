@@ -7,25 +7,34 @@ cookie once, and put it in .env:
 
     ELEARNING_COOKIE="BbRouter=...; session_id=...; ..."
 
-Then it replays the Ultra web app's own REST calls:
+The destination structure is learned from the repo itself:
+
+  * course folders are discovered under year-*/semester-*/<CODE>
+  * a Blackboard course name is matched to a folder by its acronym
+    ("Segurança de Dados" -> SD, "Segurança de Sistemas de Computação" -> SSC)
+  * items are routed by title into the folders that course already has:
+        lecture decks      -> <course>/theory/      (flat)
+        lab guides         -> <course>/guides/      (or <course>/labs/)
+        assignment sheets  -> <course>/assignments/
+  * a lab guide is skipped when that lab is already present in guides/
+
+It replays the Ultra web app's own REST calls:
 
     GET /learn/api/v1/users/me/memberships?expand=course.effectiveAvailability
     GET /learn/api/v1/courses/{pk}/contents?recursive=true
     GET /bbcswebdav/pid-…/xid-…            (the file itself)
 
-PDFs are mirrored, preserving the course's folder structure, into
-``<course>/theory/``.
-
 Usage:
-    python3 sync.py --list          # show the tree, download nothing
-    python3 sync.py --dry-run       # show what would be saved
-    python3 sync.py                 # download everything
-    python3 sync.py --course SD     # one course only
+    python3 sync.py --list          # show where everything would go
+    python3 sync.py --dry-run       # same, with get/skip decisions
+    python3 sync.py                 # download
+    python3 sync.py --course SD     # one course
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -37,7 +46,6 @@ from pathlib import Path
 
 BASE = "https://elearning.uminho.pt"
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SEMESTER_DIR = REPO_ROOT / "year-1" / "semester-1"
 
 # A normal browser UA: the WAF rejects default python-urllib clients outright.
 USER_AGENT = (
@@ -45,14 +53,13 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"
 )
 
-# Course name (substring, accent-insensitive) -> repo folder under the semester.
-COURSE_FOLDERS = {
-    "seguranca de dados": "SD",
-    "seguranca de redes": "SR",
-    "seguranca de sistemas de computacao": "SSC",
-}
-
 FILE_HANDLER = "resource/x-bb-file"
+
+STOPWORDS = {"de", "da", "do", "das", "dos", "e", "em", "para", "of", "the", "and", "a", "o"}
+
+LAB_RE = re.compile(r"\blab\b", re.I)
+ASSIGNMENT_RE = re.compile(r"\b(assignment|assessment|ficha|enunciado|trabalho)\b", re.I)
+LAB_NUMBER_RE = re.compile(r"\blab\s*0*(\d+)", re.I)
 
 
 # --------------------------------------------------------------------------- utils
@@ -97,6 +104,78 @@ def human(size: int) -> str:
             return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} GB"
+
+
+# ------------------------------------------------------------- repo structure
+
+
+def discover_courses() -> dict[str, Path]:
+    """Map course code -> folder, by scanning year-*/semester-*/."""
+    found: dict[str, Path] = {}
+    for year in sorted(REPO_ROOT.glob("year-*")):
+        for semester in sorted(year.glob("semester-*")):
+            for course in sorted(semester.iterdir()):
+                if course.is_dir() and not course.name.startswith("."):
+                    found.setdefault(course.name.upper(), course)
+    return found
+
+
+def acronym(name: str) -> str:
+    """'[26-27] Segurança de Dados' -> 'SD'; '[MC]' is ignored."""
+    clean = re.sub(r"\[[^\]]*\]", " ", name)
+    words = re.findall(r"[0-9A-Za-zÀ-ÿ]+", clean)
+    return "".join(w[0].upper() for w in words if norm(w) not in STOPWORDS)
+
+
+def resolve_course(name: str, courses: dict[str, Path]) -> tuple[str | None, Path | None]:
+    code = acronym(name)
+    if code in courses:
+        return code, courses[code]
+    for candidate, path in courses.items():  # e.g. SD2627 -> SD
+        if candidate and code.startswith(candidate):
+            return candidate, path
+    return None, None
+
+
+def category(title: str) -> str:
+    if LAB_RE.search(title):
+        return "lab"
+    if ASSIGNMENT_RE.search(title):
+        return "assignment"
+    return "theory"
+
+
+def destination(course_dir: Path, cat: str, filename: str) -> Path:
+    if cat == "lab":
+        guides = course_dir / "guides"
+        folder = guides if guides.is_dir() else course_dir / "labs"
+    elif cat == "assignment":
+        folder = course_dir / "assignments"
+    else:
+        folder = course_dir / "theory"
+    return folder / safe_name(filename)
+
+
+def existing_lab(course_dir: Path, title: str) -> Path | None:
+    """A lab guide already in guides/ for the same lab number, whatever its name."""
+    match = LAB_NUMBER_RE.search(title)
+    guides = course_dir / "guides"
+    if not match or not guides.is_dir():
+        return None
+    number = int(match.group(1))
+    pattern = re.compile(rf"^(?:lab[-_ ]?)?0*{number}(?:\D|$)", re.I)
+    return next((p for p in sorted(guides.glob("*.pdf")) if pattern.match(p.name)), None)
+
+
+def duplicate_of(folder: Path, body: bytes) -> Path | None:
+    """An existing file in `folder` with identical bytes."""
+    if not folder.is_dir():
+        return None
+    digest = hashlib.md5(body).hexdigest()
+    for path in folder.glob("*.pdf"):
+        if path.stat().st_size == len(body) and hashlib.md5(path.read_bytes()).hexdigest() == digest:
+            return path
+    return None
 
 
 # ---------------------------------------------------------------------------- http
@@ -156,16 +235,6 @@ def outline(client: Client, course_id: str) -> list[dict]:
     return client.json(f"/learn/api/v1/courses/{course_id}/contents?recursive=true").get("results", [])
 
 
-def folder_path(item: dict, by_id: dict[str, dict]) -> list[str]:
-    """Titles of the folders containing `item`, outermost first."""
-    parts, parent = [], by_id.get(item.get("parentId") or "")
-    while parent is not None:
-        if parent.get("contentHandler") == "resource/x-bb-folder":
-            parts.append(safe_name(parent.get("title", "")))
-        parent = by_id.get(parent.get("parentId") or "")
-    return list(reversed(parts))
-
-
 def pdf_of(item: dict) -> dict | None:
     if item.get("contentHandler") != FILE_HANDLER:
         return None
@@ -183,12 +252,6 @@ def pdf_of(item: dict) -> dict | None:
     }
 
 
-def destination(course_name: str, folder: list[str], filename: str) -> Path:
-    key = next((v for k, v in COURSE_FOLDERS.items() if k in norm(course_name)), None)
-    course_dir = SEMESTER_DIR / key if key else REPO_ROOT / "materials" / slug(course_name)
-    return course_dir / "theory" / Path(*folder) / safe_name(filename)
-
-
 # ----------------------------------------------------------------------------- main
 
 
@@ -196,9 +259,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--course", action="append", metavar="CODE", help="only this repo folder (SD, SR, SSC); repeatable")
-    parser.add_argument("--list", action="store_true", help="print the course tree and exit")
-    parser.add_argument("--dry-run", action="store_true", help="show what would be downloaded")
+    parser.add_argument("--course", action="append", metavar="CODE", help="only this course folder (SD, SR, SSC); repeatable")
+    parser.add_argument("--list", action="store_true", help="print the destination of every PDF and exit")
+    parser.add_argument("--dry-run", action="store_true", help="show get/skip decisions without writing")
     parser.add_argument("--force", action="store_true", help="re-download files that already exist")
     parser.add_argument("--env", default=str(Path(__file__).with_name(".env")), help="path to the .env file")
     args = parser.parse_args()
@@ -213,37 +276,72 @@ def main() -> int:
         )
 
     client = Client(cookie)
+    known = discover_courses()
     todo: list[tuple[Path, dict]] = []
 
     for course in courses(client):
-        key = next((v for k, v in COURSE_FOLDERS.items() if k in norm(course["name"])), None)
-        if args.course and key not in args.course:
+        code, course_dir = resolve_course(course["name"], known)
+        if args.course and code not in args.course:
             continue
+        label = code or f"materials/{slug(course['name'])}"
+        if course_dir is None:
+            course_dir = REPO_ROOT / "materials" / slug(course["name"])
+
         items = outline(client, course["id"])
-        by_id = {i["id"]: i for i in items}
-        pdfs = [(folder_path(i, by_id), p) for i in items if (p := pdf_of(i))]
-        print(f"\n{course['name']} -> {key or 'materials/' + slug(course['name'])}: {len(pdfs)} PDFs")
-        for folder, pdf in pdfs:
-            dest = destination(course["name"], folder, pdf["name"])
-            todo.append((dest, pdf))
+        pdfs = [p for i in items if (p := pdf_of(i))]
+        counts: dict[str, int] = {}
+        print(f"\n{course['name']} -> {label}: {len(pdfs)} PDFs")
+
+        for item in items:
+            pdf = pdf_of(item)
+            if not pdf:
+                continue
+            cat = category(item.get("title", ""))
+            counts[cat] = counts.get(cat, 0) + 1
+            dest = destination(course_dir, cat, pdf["name"])
+            todo.append((dest, pdf, item.get("title", "")))
             if args.list:
-                print("  " + str(dest.relative_to(REPO_ROOT)))
+                print(f"  [{cat}] {dest.relative_to(REPO_ROOT)}")
             elif args.dry_run:
-                state = "skip" if dest.exists() and not args.force else "get "
-                print(f"  {state} {dest.relative_to(REPO_ROOT)}")
+                state = "get"
+                if not args.force:
+                    if dest.exists() and dest.stat().st_size == pdf["size"]:
+                        state = "skip"
+                    elif dest.parent.name == "guides" and (lab := existing_lab(course_dir, item.get("title", ""))):
+                        state = f"skip ({lab.name})"
+                print(f"  {state:6} [{cat}] {dest.relative_to(REPO_ROOT)}")
+
+        if counts:
+            print("  " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
 
     if args.list or args.dry_run:
         return 0
 
     saved = skipped = failed = 0
-    for dest, pdf in todo:
+    for dest, pdf, title in todo:
         if dest.exists() and not args.force and dest.stat().st_size == pdf["size"]:
             skipped += 1
             continue
+
+        course_dir = dest.parents[1]
+        if dest.parent.name == "guides" and not args.force:
+            already = existing_lab(course_dir, title)
+            if already:
+                print(f"  = {dest.relative_to(REPO_ROOT)} (already present as {already.name})")
+                skipped += 1
+                continue
+
         try:
             body = client.bytes(pdf["url"])
             if not body.startswith(b"%PDF"):
                 raise RuntimeError("not a PDF")
+
+            twin = duplicate_of(dest.parent, body) if dest.parent.is_dir() else None
+            if twin and not args.force:
+                print(f"  = {dest.relative_to(REPO_ROOT)} (identical to {twin.name})")
+                skipped += 1
+                continue
+
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(body)
             saved += 1
