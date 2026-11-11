@@ -37,6 +37,7 @@ from pathlib import Path
 
 BASE = "https://elearning.uminho.pt"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SEMESTER_DIR = REPO_ROOT / "year-1" / "semester-1"
 
 # A normal browser UA: the WAF rejects default python-urllib clients outright.
 USER_AGENT = (
@@ -184,7 +185,7 @@ def pdf_of(item: dict) -> dict | None:
 
 def destination(course_name: str, folder: list[str], filename: str) -> Path:
     key = next((v for k, v in COURSE_FOLDERS.items() if k in norm(course_name)), None)
-    course_dir = REPO_ROOT / key if key else REPO_ROOT / "materials" / slug(course_name)
+    course_dir = SEMESTER_DIR / key if key else REPO_ROOT / "materials" / slug(course_name)
     return course_dir / "theory" / Path(*folder) / safe_name(filename)
 
 

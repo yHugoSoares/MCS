@@ -42,4 +42,14 @@ them with real screenshots.
 
 ## Theory
 
-`theory/` is empty for now — the lecture slides have not been added yet.
+`theory/Aulas Teóricas/` holds the seven lecture decks:
+
+- `SR2627_0_Apresentação_v02` — course presentation
+- `NetSecurity01` — Introduction, Threats and Attacks
+- `NetSecurity02-03` — Transport Layer Security (TLS)
+- `NetSecurity04` — Security at the Transport Layer (TCP/UDP/QUIC)
+- `NetSecurity05` — Network Layer Security (IP/ICMP + IPsec)
+- `NetSecurity06` — Network Layer Security (VPNs + IPv6)
+- `NetSecurity-07` — Routing Security
+
+Re-sync with `python3 tools/elearning-sync/sync.py --course SR`.

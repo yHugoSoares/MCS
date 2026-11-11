@@ -55,4 +55,14 @@ the build must run from `reports/` (the `Makefile` already does that).
 
 ## Theory
 
-`theory/` is empty for now — the lecture slides have not been added yet.
+`theory/` mirrors the course outline, so the lectures and the lab guides sit together in
+their block folders:
+
+| Folder | Contents |
+| ------ | -------- |
+| `Start Here/` | Week 0: Getting Ready |
+| `Block 1: Threat Modelling and Attack Surface/` | Lectures 1–2, Labs 1–2 |
+| `Block 2: Authentication and Authorisation/` | Lectures 3–5, Labs 3–5 |
+| `Block 3: The Unix Privilege Model, Capabilities and MAC/` | Lectures 6–8, Labs 6–8 |
+
+17 PDFs in total. Re-sync with `python3 tools/elearning-sync/sync.py --course SSC`.

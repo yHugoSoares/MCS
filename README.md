@@ -38,8 +38,8 @@ Each course has its own `README.md` with the deliverables, dates and build instr
 
 ## Notes
 
-- **Theoretical PDFs** live in each course's `theory/` folder. The folders exist; the
-  SR and SSC slides have not been added yet.
+- **Theoretical PDFs** live in each course's `theory/` folder, mirrored from eLearning with
+  [`tools/elearning-sync`](tools/elearning-sync) — see its README.
 - **`year-1/semester-1/SD/sd2627` is a git submodule** pointing at
   [marcosevegrand/sd2627](https://github.com/marcosevegrand/sd2627). Clone with:
 

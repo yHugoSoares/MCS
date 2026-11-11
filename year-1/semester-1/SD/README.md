@@ -52,8 +52,15 @@ Its own `README.md` and `docs/` cover the architecture and the plan.
 
 ## Theory
 
-`theory/` holds the lecture slides. Currently:
+`theory/Slides/` holds the eight lecture decks, mirrored from eLearning:
 
-- `01-introduction-and-concepts.pdf` — Introduction and Concepts
+- `00 DS Presentation`
+- `01 DS Introduction and Concepts`
+- `02 Symmetric cryptography — Classical techniques`
+- `03 Symmetric cryptography — Stream ciphers`
+- `04 Symmetric cryptography — Block ciphers`
+- `05 Data integrity — Cryptographic hash functions`
+- `06 Data integrity — MAC and Authenticated encryption`
+- `07 Asymmetric cryptography`
 
-Add the remaining decks there as they become available.
+Re-sync with `python3 tools/elearning-sync/sync.py --course SD`.
