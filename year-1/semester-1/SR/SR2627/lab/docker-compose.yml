@@ -1,0 +1,180 @@
+name: sr-tp4
+
+# ---------------------------------------------------------------------------
+# TP4 - task 1 (infrastructure only).
+#
+#   client_lan 10.9.0.0/24 (internal)        server_lan 10.9.1.0/24 (internal)
+#   attacker .2   legit client .3  -->  firewall .254 | .254  -->  web .2  db .3
+#
+# Both networks are `internal: true`, so Docker installs no default route and
+# every host is forced through the firewall via an explicit route
+# (scripts/net-init.sh). The firewall container only forwards; packet
+# interception and the decision engine are task 2.
+# ---------------------------------------------------------------------------
+
+networks:
+  client_lan:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${LAB_CLIENT_SUBNET}
+  server_lan:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${LAB_SERVER_SUBNET}
+
+x-lab-base: &lab-base
+  build:
+    context: .
+    dockerfile: images/base/Dockerfile
+  image: sr-tp4/base:local
+  init: true
+  restart: "no"
+  stop_grace_period: 2s
+  environment:
+    TZ: ${LAB_TZ}
+  volumes:
+    - ./scripts:/opt/lab:ro
+
+services:
+  # ------------------------------------------------------------------------
+  # Gateway between the two zones. Task 1 guarantees the routing; task 2
+  # replaces the command below with its interception/decision engine.
+  # ------------------------------------------------------------------------
+  firewall:
+    <<: *lab-base
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      net.ipv4.ip_forward: 1
+    networks:
+      client_lan:
+        ipv4_address: ${LAB_FW_CLIENT_IP}
+      server_lan:
+        ipv4_address: ${LAB_FW_SERVER_IP}
+    environment:
+      LAB_CLIENT_IP: ${LAB_FW_CLIENT_IP}
+      LAB_SERVER_IP: ${LAB_FW_SERVER_IP}
+    command: ["sleep", "infinity"]
+
+  # ------------------------------------------------------------------------
+  # Attack host. Tasks 3/4 drop their scripts in attacks/ and execute them
+  # here (docker compose exec attacker bash <script>).
+  # ------------------------------------------------------------------------
+  attacker:
+    <<: *lab-base
+    entrypoint: ["/opt/lab/net-init.sh"]
+    command: ["sleep", "infinity"]
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    mac_address: "${LAB_ATTACKER_MAC}"
+    networks:
+      client_lan:
+        ipv4_address: ${LAB_ATTACKER_IP}
+    environment:
+      GATEWAY: ${LAB_FW_CLIENT_IP}
+      LAB_ATTACKER_IP: ${LAB_ATTACKER_IP}
+      LAB_CLIENT_IP: ${LAB_CLIENT_IP}
+      LAB_WEB_IP: ${LAB_WEB_IP}
+      LAB_DB_IP: ${LAB_DB_IP}
+      LAB_FW_CLIENT_IP: ${LAB_FW_CLIENT_IP}
+
+  # ------------------------------------------------------------------------
+  # Legitimate user. Runs traffic/legit_client.py so the "legitimate service"
+  # requirement is measured before, during and after every attack.
+  # ------------------------------------------------------------------------
+  client:
+    <<: *lab-base
+    entrypoint: ["/opt/lab/net-init.sh"]
+    command: ["sleep", "infinity"]
+    cap_add:
+      # NET_ADMIN only to install the default route that points at the
+      # firewall (Docker's internal networks have none).
+      - NET_ADMIN
+      - NET_RAW
+    mac_address: "${LAB_CLIENT_MAC}"
+    networks:
+      client_lan:
+        ipv4_address: ${LAB_CLIENT_IP}
+    environment:
+      GATEWAY: ${LAB_FW_CLIENT_IP}
+      LAB_CLIENT_IP: ${LAB_CLIENT_IP}
+      LAB_WEB_IP: ${LAB_WEB_IP}
+    volumes:
+      - ./scripts:/opt/lab:ro
+      - ./traffic:/opt/traffic:ro
+      - ./logs/client:/var/log/client
+    depends_on:
+      - firewall
+      - web
+
+  # ------------------------------------------------------------------------
+  # Protected service: HTTP server + database, the target for the L7 attacks.
+  # Deliberately vulnerable; not reachable from the host.
+  # ------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: images/web/Dockerfile
+    image: sr-tp4/web:local
+    init: true
+    restart: "no"
+    entrypoint: ["/opt/lab/net-init.sh", "docker-php-entrypoint"]
+    command: ["apache2-foreground"]
+    cap_add:
+      # Only to program the default route towards the firewall; the app itself
+      # runs unprivileged under Apache.
+      - NET_ADMIN
+    networks:
+      server_lan:
+        ipv4_address: ${LAB_WEB_IP}
+    environment:
+      GATEWAY: ${LAB_FW_SERVER_IP}
+      LAB_DB_HOST: ${LAB_DB_IP}
+      LAB_DB_NAME: ${LAB_DB_NAME}
+      LAB_DB_USER: ${LAB_DB_USER}
+      LAB_DB_PASS: ${LAB_DB_PASS}
+    volumes:
+      - ./scripts:/opt/lab:ro
+      - ./web:/var/www/html:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "php -r 'exit(@file_get_contents(\"http://127.0.0.1/healthz.php\") === false ? 1 : 0);'"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:11
+    init: true
+    restart: "no"
+    networks:
+      server_lan:
+        ipv4_address: ${LAB_DB_IP}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${LAB_DB_ROOT_PASS}
+      MARIADB_DATABASE: ${LAB_DB_NAME}
+      MARIADB_USER: ${LAB_DB_USER}
+      MARIADB_PASSWORD: ${LAB_DB_PASS}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  dbdata:

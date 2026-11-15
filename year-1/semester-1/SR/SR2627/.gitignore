@@ -1,0 +1,13 @@
+# Runtime artefacts (never commit evidence by accident, export it on purpose)
+logs/
+captures/
+*.pcap
+*.pcapng
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local overrides
+docker-compose.override.yml
+.env.local
