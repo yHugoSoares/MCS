@@ -60,7 +60,7 @@ the default route towards the firewall requires it. Nothing else uses it.
 ## What this branch does not contain
 
 Packet interception, decisions and logging (task 2), attack scripts (tasks 3/4)
-and the monitoring stack (task 5) live on `main`, together with the full plan
+and the monitoring stack (task 5) live on `full-work`, together with the full plan
 (`docs/plan/01-infra.md`). Here the firewall only forwards — task 2 replaces its
 `sleep infinity` command with the engine.
 

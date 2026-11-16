@@ -5,7 +5,7 @@
 **Owner:** role 1. **Consumers:** roles 2-5.
 **Source of truth for requirements:** [`../tp4.md`](../tp4.md) (converted from the assignment PDF).
 
-> **`main` implements task 1 only:** the topology with the firewall as
+> **`master` implements task 1 only:** the topology with the firewall as
 > mandatory gateway, the web+db targets and the benign traffic generator. The
 > extra zones and components referenced in §3.4-§6 and §7 (in-lab DNS,
 > telemetry network, firewall engine, attack scripts, monitoring stack) are on
@@ -211,7 +211,7 @@ JSONL, attacker logs, dashboard annotation.
 ### 6.1 NFQUEUE availability on Docker Desktop (blocking, M0)
 
 Docker Desktop runs a LinuxKit kernel. `iptables -j NFQUEUE` may be absent, in
-which case the whole design needs a different runtime. The probe on `main`
+which case the whole design needs a different runtime. The probe on `full-work`
 (`scripts/doctor.sh`, task 2) inserts a real NFQUEUE rule, sends one packet and
 checks that the packet is held.
 
@@ -364,7 +364,7 @@ Today: **15 Nov 2026**. Checkpoint: **10 Dec 2026, 14-16h**. Submission:
 
 | # | Risk | Impact | Mitigation / gate |
 | --- | --- | --- | --- |
-| R1 | NFQUEUE missing in Docker Desktop kernel | Blocks interception (task 2) | doctor probe on `main`; fallback UTM Ubuntu arm64 VM, same compose files |
+| R1 | NFQUEUE missing in Docker Desktop kernel | Blocks interception (task 2) | doctor probe on `full-work`; fallback UTM Ubuntu arm64 VM, same compose files |
 | R2 | Docker 28+ enforces `internal: true` with `DOCKER-INTERNAL` drops on cross-subnet frames, which breaks a router topology | Cross-zone traffic dies silently (observed: 26 dropped packets) | zones are plain bridges; `net-init.sh` forces the route + blackholes `.1`; `verify-path.sh` asserts packets reach the firewall |
 | R3 | Docker bridge does not deliver forged ARP to peers | ARP spoofing demo fails | pinned MACs, promisc on firewall, L2 test at M0/M2; fallback = dedicated Linux bridge on the UTM VM |
 | R4 | No DHCP client → DHCP spoofing has no victim | One attack weakens | role 4 decision: install `isc-dhcp-client` in the client image, or "detected only" with the OFFER captured at the firewall |
