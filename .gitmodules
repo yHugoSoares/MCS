@@ -1,3 +1,7 @@
 [submodule "year-1/semester-1/SD/sd2627"]
 	path = year-1/semester-1/SD/sd2627
 	url = https://github.com/marcosevegrand/sd2627.git
+[submodule "year-1/semester-1/SR/SR2627"]
+	path = year-1/semester-1/SR/SR2627
+	url = https://github.com/yHugoSoares/SR2627.git
+	branch = master

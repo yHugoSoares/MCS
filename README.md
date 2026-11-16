@@ -33,15 +33,17 @@ Each course has its own `README.md` with the deliverables, dates and build instr
 | Year | Semester | Code | Course                    | Work                                       |
 | ---- | -------- | ---- | ------------------------- | ------------------------------------------ |
 | 1    | 1        | SD   | Data Security             | 5 assignments + group project              |
-| 1    | 1        | SR   | Network Security          | 3 lab assignments (TP1–TP3)                |
+| 1    | 1        | SR   | Network Security          | 4 lab assignments (TP1–TP4)                |
 | 1    | 1        | SSC  | Computer Systems Security | 8 lab guides + 3 written reports           |
 
 ## Notes
 
 - **Theoretical PDFs** live in each course's `theory/` folder, mirrored from eLearning with
   [`tools/elearning-sync`](tools/elearning-sync) — see its README.
-- **`year-1/semester-1/SD/sd2627` is a git submodule** pointing at
-  [marcosevegrand/sd2627](https://github.com/marcosevegrand/sd2627). Clone with:
+- **Two folders are git submodules**, each pointing at its own repository:
+  `year-1/semester-1/SD/sd2627` → [marcosevegrand/sd2627](https://github.com/marcosevegrand/sd2627),
+  `year-1/semester-1/SR/SR2627` → [yHugoSoares/SR2627](https://github.com/yHugoSoares/SR2627)
+  (branch `master`; the full scaffold is on `full-work`). Clone with:
 
   ```sh
   git clone --recurse-submodules <this-repo>
