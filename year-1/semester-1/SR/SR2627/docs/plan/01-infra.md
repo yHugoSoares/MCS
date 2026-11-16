@@ -35,7 +35,7 @@ Non-goals: firewall decision logic (role 2), detectors (roles 3/4), dashboards
 | # | Decision | Rationale |
 | --- | --- | --- |
 | D1 | Docker Compose, multi-arch images, runs on macOS arm64 and Linux x86_64/arm64 | Team machines differ; assignment explicitly allows a container-based lab |
-| D2 | Two data-plane zones: `client_lan 10.9.0.0/24`, `server_lan 10.9.1.0/24`, both `internal: true` | Firewall is the only route; no accidental bypass to the host or the internet |
+| D2 | Two data-plane zones: `client_lan 10.9.0.0/24`, `server_lan 10.9.1.0/24`, plain bridges with an explicit default route to the firewall and the Docker bridge gateway blackholed | Firewall is the only route. `internal: true` is *not* usable: Docker 28+ drops routed frames leaving the bridge subnet (see R2) |
 | D3 | Attacker **and** legitimate client share `client_lan` with the firewall's LAN interface | Makes ARP/DHCP/DNS spoofing really observable by the firewall, instead of hand-waved as out of scope |
 | D4 | Monitoring stack deferred to role 5; role 1 guarantees a file sink, a push hook (`LAB_TELEMETRY_SINK`) and an isolated `telemetry` network | Avoids blocking on a 4-8 GB ELK decision |
 | D5 | Firewall container fails **closed** (`FORWARD` DROP) when the engine is missing | Nobody can mistake an unimplemented firewall for a working one |
@@ -60,14 +60,14 @@ Non-goals: firewall decision logic (role 2), detectors (roles 3/4), dashboards
 
 ```mermaid
 flowchart LR
-    subgraph CLIENT["client_lan 10.9.0.0/24 (internal)"]
+    subgraph CLIENT["client_lan 10.9.0.0/24"]
         ATK["attacker<br/>10.9.0.2<br/>NET_ADMIN + NET_RAW"]
         CLI["legit client<br/>10.9.0.3<br/>legit_client.py"]
     end
 
     FW["firewall<br/>10.9.0.254 / 10.9.1.254<br/>ip_forward=1 · NFQUEUE · promisc"]
 
-    subgraph SERVER["server_lan 10.9.1.0/24 (internal)"]
+    subgraph SERVER["server_lan 10.9.1.0/24"]
         WEB["web 10.9.1.2:80<br/>PHP 8.2 / Apache<br/>intentionally vulnerable"]
         DB["db 10.9.1.3:3306<br/>MariaDB 11"]
         DNS["dns 10.9.1.53:53<br/>dnsmasq lab.local"]
@@ -119,7 +119,7 @@ Interface names inside the firewall are **resolved from the IP at start**
 Docker does not guarantee attachment order.
 
 Every container that must use the firewall as its gateway needs `NET_ADMIN` to
-install that route (`internal` networks have no default gateway). This is why
+install that route and blackhole the bridge gateway. This is why
 `client`, `web` and `dns` carry the capability too, and why the report must
 explain it under §9 ("limit elevated capabilities to the components that require
 them"): the capability programs one route at boot and is never used again.
@@ -127,7 +127,7 @@ them"): the capability programs one route at boot and is never used again.
 ### 3.3 Packet path (what the report has to describe)
 
 1. `client` wants `10.9.1.2`. Its only default route is `10.9.0.254`
-   (`scripts/net-init.sh`, because `internal: true` leaves no gateway).
+   (`scripts/net-init.sh`: rewrite the default route, blackhole `10.9.x.1`).
 2. The frame is delivered to the firewall's `client_lan` interface. Docker does
    **no** routing for it: the firewall container owns both subnets, so the
    decision happens inside its network namespace.
@@ -236,8 +236,7 @@ Not built. If role 4 wants real reflection, add a fourth leg:
 # docker-compose.override.yml (not committed in the default path)
 networks:
   wan:
-    driver: bridge
-    internal: true
+    driver: bridge            # not internal, same reason as the two zones
     ipam: { config: [{ subnet: 10.9.3.0/24 }] }
 services:
   firewall:
@@ -277,7 +276,7 @@ it with `127.0.0.11`. Mitigation if that hides queries from the firewall: bind
 
 ```text
 lab/
-├── docker-compose.yml      2 internal zones, 5 services
+├── docker-compose.yml      2 zones, 5 services
 ├── .env                    addresses, MACs, database credentials
 ├── Makefile                up/down/verify/baseline/trial/logs
 ├── images/base/Dockerfile  debian:12-slim + python3 (attacker, client, firewall)
@@ -366,7 +365,7 @@ Today: **15 Nov 2026**. Checkpoint: **10 Dec 2026, 14-16h**. Submission:
 | # | Risk | Impact | Mitigation / gate |
 | --- | --- | --- | --- |
 | R1 | NFQUEUE missing in Docker Desktop kernel | Blocks interception (task 2) | doctor probe on `main`; fallback UTM Ubuntu arm64 VM, same compose files |
-| R2 | `internal: true` networks behave differently across Docker versions | Traffic silently leaks via `.1` | `net-init.sh` forces the route; `verify-path.sh` asserts the firewall is the next hop |
+| R2 | Docker 28+ enforces `internal: true` with `DOCKER-INTERNAL` drops on cross-subnet frames, which breaks a router topology | Cross-zone traffic dies silently (observed: 26 dropped packets) | zones are plain bridges; `net-init.sh` forces the route + blackholes `.1`; `verify-path.sh` asserts packets reach the firewall |
 | R3 | Docker bridge does not deliver forged ARP to peers | ARP spoofing demo fails | pinned MACs, promisc on firewall, L2 test at M0/M2; fallback = dedicated Linux bridge on the UTM VM |
 | R4 | No DHCP client → DHCP spoofing has no victim | One attack weakens | role 4 decision: install `isc-dhcp-client` in the client image, or "detected only" with the OFFER captured at the firewall |
 | R5 | Embedded DNS hides queries from the firewall | DNS spoofing not observable | static `resolv.conf` / disable embedded resolver (6.4) |

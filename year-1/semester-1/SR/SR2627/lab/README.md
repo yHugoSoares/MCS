@@ -6,7 +6,7 @@ traffic generator. Runs with Docker Compose on macOS (arm64) and Linux
 (x86_64/arm64); all images are multi-arch.
 
 ```text
- client_lan 10.9.0.0/24 (internal)          server_lan 10.9.1.0/24 (internal)
+ client_lan 10.9.0.0/24                    server_lan 10.9.1.0/24
  ┌────────────┐  ┌────────────┐             ┌────────────┐  ┌────────────┐
  │ attacker   │  │ client     │             │ web        │  │ db         │
  │ 10.9.0.2   │  │ 10.9.0.3   │             │ 10.9.1.2   │  │ 10.9.1.3   │
@@ -16,10 +16,18 @@ traffic generator. Runs with Docker Compose on macOS (arm64) and Linux
                         10.9.0.254 │ 10.9.1.254
 ```
 
-Every packet between zones is routed by the firewall container: both networks
-are `internal`, so Docker installs no default route and each host gets
-`default via 10.9.0.254` / `10.9.1.254` explicitly (`scripts/net-init.sh`).
-No service is published to the host.
+Every packet between zones is routed by the firewall container. Each host gets
+an explicit `default via 10.9.0.254` / `10.9.1.254` and the Docker bridge
+gateway (`10.9.x.1`) is blackholed, so there is no other way out
+(`scripts/net-init.sh`). No service is published to the host.
+
+> **Do not set `internal: true` on these networks.** Docker 28+ implements it
+> with a `DOCKER-INTERNAL` netfilter rule that drops any frame entering the
+> bridge whose destination IP is outside the bridge subnet
+> (`iifname br-... ip daddr != 10.9.0.0/24 drop`). Routed traffic to `10.9.1.x`
+> enters `client_lan` with daddr `10.9.1.2`, so it is dropped before it reaches
+> the firewall. The route + blackhole above achieves the same isolation without
+> breaking the topology.
 
 ## Quick start
 
@@ -60,7 +68,7 @@ and the monitoring stack (task 5) live on `main`, together with the full plan
 
 ```text
 lab/
-├── docker-compose.yml     5 services, 2 internal zones
+├── docker-compose.yml     5 services, 2 zones
 ├── .env                   addresses, MACs, database credentials
 ├── Makefile               up/down/verify/baseline/trial/logs
 ├── images/base/           debian:12 + python3 (attacker/client/firewall)
@@ -78,10 +86,12 @@ lab/
 | client cannot reach the firewall | default route lost: `docker compose restart client` |
 | web unhealthy | `make logs F=db`; schema loads only on an empty volume: `make reset` |
 | `make verify` sees 0 packets | firewall is not the gateway: `docker compose exec client ip route` |
+| containers start with unexpected IPs/MACs | stale network: `docker compose down && docker network rm sr-tp4_client_lan sr-tp4_server_lan` |
+| cross-zone traffic dies in `DOCKER-INTERNAL` | someone re-added `internal: true`, see the warning above |
 | arm64 host pulls amd64 images | only add multi-arch images |
 
 ## Safety
 
-Everything stays inside the two `internal` Docker networks; `make clean` removes
+Everything stays inside the two lab networks; `make clean` removes
 containers, networks and the database volume. Attacks must never leave
 `10.9.0.0/24` / `10.9.1.0/24`.

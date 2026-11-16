@@ -15,11 +15,11 @@ help: ## Show this help
 init: ## Create runtime log directories
 	@mkdir -p $(LOG_DIRS)
 
-build: init ## Build the lab images
-	$(COMPOSE) build
+build: init ## Build the lab images (each exactly once)
+	$(COMPOSE) build firewall web
 
-up: init ## Start the lab
-	$(COMPOSE) up -d --build
+up: init build ## Start the lab
+	$(COMPOSE) up -d
 	@$(COMPOSE) ps
 	@printf '\nNext: make verify\n'
 

@@ -3,33 +3,38 @@ name: sr-tp4
 # ---------------------------------------------------------------------------
 # TP4 - task 1 (infrastructure only).
 #
-#   client_lan 10.9.0.0/24 (internal)        server_lan 10.9.1.0/24 (internal)
+#   client_lan 10.9.0.0/24                server_lan 10.9.1.0/24
 #   attacker .2   legit client .3  -->  firewall .254 | .254  -->  web .2  db .3
 #
-# Both networks are `internal: true`, so Docker installs no default route and
-# every host is forced through the firewall via an explicit route
-# (scripts/net-init.sh). The firewall container only forwards; packet
+# Every host is forced through the firewall by an explicit default route
+# (scripts/net-init.sh); the Docker bridge gateway (.1) is blackholed so there
+# is no second way out. The firewall container only forwards; packet
 # interception and the decision engine are task 2.
 # ---------------------------------------------------------------------------
 
+# Both zones are plain bridges, NOT `internal: true`: Docker 28+ implements
+# "internal" with a netfilter rule that drops any frame entering the bridge
+# whose destination IP is outside the bridge subnet (chain DOCKER-INTERNAL):
+#
+#   iifname "br-<client_lan>" ip daddr != 10.9.0.0/24 drop
+#
+# A routed packet to 10.9.1.x enters client_lan with daddr 10.9.1.2, so it was
+# dropped before reaching the firewall. Instead: every host gets an explicit
+# default route to the firewall, and the Docker bridge gateway is blackholed
+# (scripts/net-init.sh), so the firewall is still the only way out.
 networks:
   client_lan:
     driver: bridge
-    internal: true
     ipam:
       config:
         - subnet: ${LAB_CLIENT_SUBNET}
   server_lan:
     driver: bridge
-    internal: true
     ipam:
       config:
         - subnet: ${LAB_SERVER_SUBNET}
 
 x-lab-base: &lab-base
-  build:
-    context: .
-    dockerfile: images/base/Dockerfile
   image: sr-tp4/base:local
   init: true
   restart: "no"
@@ -43,9 +48,16 @@ services:
   # ------------------------------------------------------------------------
   # Gateway between the two zones. Task 1 guarantees the routing; task 2
   # replaces the command below with its interception/decision engine.
+  #
+  # This is the ONLY service that builds sr-tp4/base:local. The others just
+  # reference the image: three services building the same Dockerfile in
+  # parallel is what makes BuildKit drop the session on Docker Desktop.
   # ------------------------------------------------------------------------
   firewall:
     <<: *lab-base
+    build:
+      context: .
+      dockerfile: images/base/Dockerfile
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -93,8 +105,8 @@ services:
     entrypoint: ["/opt/lab/net-init.sh"]
     command: ["sleep", "infinity"]
     cap_add:
-      # NET_ADMIN only to install the default route that points at the
-      # firewall (Docker's internal networks have none).
+      # NET_ADMIN only to rewrite the default route and blackhole the Docker
+      # bridge gateway (scripts/net-init.sh).
       - NET_ADMIN
       - NET_RAW
     mac_address: "${LAB_CLIENT_MAC}"
