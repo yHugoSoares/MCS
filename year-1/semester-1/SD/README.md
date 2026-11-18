@@ -22,7 +22,7 @@ sd2627/         group project (git submodule)
 | 02 | `02-classical-ciphers` | Classical cryptographic schemes (monoalphabetic attack) | 09/10/2026 |
 | 03 | `03-stream-ciphers`    | Stream ciphers (OTP reuse, crib-dragging)    | 16/10/2026 |
 | 04 | `04-block-ciphers`     | Block ciphers and modes of operation         | 23/11/2026 |
-| 05 | `05-openssl`           | OpenSSL exercise: ChaCha20 and CMS           | —          |
+| 05 | `05-openssl`           | Digital signatures (HMAC vs RSA-PSS, textbook RSA forgery, DSA nonce reuse) | 18/11/2026 |
 
 Each folder contains the statement (`assignment.pdf`), the report source and PDF, and the
 code where applicable. Where the submitted bundle differs from the final report, it is kept
@@ -35,7 +35,8 @@ cd assignments/01-threat-models
 pdflatex report.tex
 ```
 
-`05-openssl` is driven by its own `Makefile` (`make help`).
+`05-openssl` also keeps the earlier OpenSSL lab (`Makefile`, ChaCha20/CMS); the graded
+assignment 5 code is the Python set in that folder.
 
 ## Project
 

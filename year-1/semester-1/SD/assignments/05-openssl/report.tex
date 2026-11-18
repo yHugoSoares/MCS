@@ -1,0 +1,298 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{verbatim}
+
+\title{Segurança de Dados\\\large Assignment 5: Assinaturas digitais}
+\author{Hugo Soares}
+\date{18 de novembro de 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Questão 1}
+
+\subsection*{Q1.a --- HMAC-SHA256 versus RSA-PSS}
+
+\textbf{Ideia.} O HMAC é simétrico \cite{rfc2104}: as duas partes partilham
+uma chave $K$ e calculam
+\[
+T = \mathrm{HMAC\text{-}SHA256}(K, M).
+\]
+A assinatura RSA-PSS é
+assimétrica: o signatário usa a chave privada e o verificador usa a chave
+pública,
+$s = \mathrm{RSA}_{d}(\mathrm{EMSA\text{-}PSS}(H(M)))$ \cite{rfc8017}.
+
+O programa assina e verifica a mesma mensagem de 37 bytes (uma transferência de
+500 EUR para a conta PT50-0001) e mede cada operação
+individualmente com \texttt{time.perf\_counter\_ns()}, depois de um
+aquecimento. Foram feitas 1000 iterações para o HMAC e 500 para o RSA, que é
+mais lento.
+
+\begin{verbatim}
+tag = hmac.HMAC(key, hashes.SHA256()); tag.update(M); tag.finalize()
+sig = private_key.sign(M, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                      salt_length=32), hashes.SHA256())
+public_key.verify(sig, M, pss, hashes.SHA256())
+\end{verbatim}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & HMAC-SHA256 & RSA-PSS-2048/SHA-256 \\
+\midrule
+Chave usada & 32 B (partilhada) & 1218 B privada / 294 B pública \\
+Tag/assinatura & 32 B & 256 B \\
+Geração & 1,59 $\mu$s & 596,6 $\mu$s \\
+Verificação & 1,54 $\mu$s & 20,2 $\mu$s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Discussão.} O HMAC é cerca de 375 vezes mais rápido a gerar e 13 vezes
+mais rápido a verificar; a assinatura é 8 vezes maior. A assinatura RSA é
+dominada pela exponenciação modular com o expoente privado $d$; a verificação
+usa $e=65537$, por isso é muito mais barata. Em compensação, o HMAC exige uma
+chave secreta partilhada: com $n$ participantes são necessárias
+$n(n-1)/2$ chaves e cada par tem de as distribuir por um canal seguro. A chave
+pública RSA pode ser publicada e certificada, e uma única chave privada serve
+para assinar para todos. O custo de gerar o par de chaves RSA (não medido
+acima) é igualmente muito superior ao de gerar 32 bytes aleatórios.
+
+\subsection*{Q1.b --- Porque é que o HMAC não resolve a disputa?}
+
+No HMAC, $K$ é conhecida por Alice e por Bob. Logo, Alice consegue calcular
+exatamente a mesma tag que Bob para qualquer mensagem. Se Alice afirmar que
+Bob lhe enviou $M$, Bob pode responder que foi Alice que gerou a tag, e um
+juiz não tem forma de distinguir os dois: a tag apenas prova que
+\emph{alguém que conhece $K$} criou a mensagem. O HMAC dá integridade e
+autenticidade entre as partes que confiam uma na outra, mas não dá
+\textbf{não-repúdio}, porque o verificador tem o mesmo poder de forjar que o
+signatário.
+
+Numa assinatura digital, o valor $s$ depende de $d$, que só Bob conhece. Alice
+verifica com $e$, que é público, mas não consegue produzir $s$. É esta
+assimetria de conhecimento que sustenta o não-repúdio: o requisito é que a
+assinatura use \emph{apenas dados conhecidos pelo signatário}. Bob não pode
+negar depois ter assinado, desde que a chave privada esteja protegida; se a
+chave for comprometida, a garantia desaparece. Na prática isto exige também
+uma PKI que ligue a chave pública à identidade de Bob, e revogação em caso de
+compromisso.
+
+\subsection*{Q1.c --- Cifrar com a chave pública de Alice não autentica a origem}
+
+Cifrar com $PU_{Alice}$ garante confidencialidade para Alice: só ela tem
+$PR_{Alice}$ para decifrar. Mas $PU_{Alice}$ é pública, portanto
+\emph{qualquer pessoa} pode construir um ciphertext válido. O seguinte código
+não usa Bob em lado nenhum:
+
+\begin{verbatim}
+forged = b"TRANSFER 99999 EUR TO ACCOUNT PT50-6666 -- Bob"
+ct = alice_public.encrypt(forged, OAEP)
+pt = alice_private.decrypt(ct, OAEP)   # Alice decifra sem erros
+\end{verbatim}
+
+A execução mostra que Alice obtém a mensagem forjada e não tem qualquer
+indicação de que não foi Bob:
+
+\begin{verbatim}
+Alice decrypts successfully:
+  TRANSFER 99999 EUR TO ACCOUNT PT50-6666 -- Bob
+Mallory's signature does NOT verify with Bob's public key.
+Bob's signature verifies with Bob's public key: the source is proven.
+\end{verbatim}
+
+O RSA-OAEP protege contra modificação do ciphertext, mas não diz quem o
+criou. Para autenticar a origem é preciso uma assinatura: Bob assina com
+$PR_{Bob}$ e Alice verifica com $PU_{Bob}$. Se também for necessário sigilo,
+faz-se \emph{sign-then-encrypt} (assinar e depois cifrar para Alice). A
+identidade escrita no plaintext não vale nada sem essa prova criptográfica.
+
+\section*{Questão 2}
+
+\subsection*{Q2.a --- Assinatura RSA de livro}
+
+Com as chaves geradas pela biblioteca, obtêm-se $n$, $e$ e $d$ através de
+\texttt{private\_numbers()} e \texttt{public\_numbers()}. Cada mensagem é
+interpretada como um inteiro big-endian, e assina-se diretamente
+$s = m^d \bmod n$, sem hash nem padding:
+
+\begin{verbatim}
+s = pow(m, d, n)
+pow(s, e, n) == m          # verificação
+\end{verbatim}
+
+Para as duas mensagens do enunciado (295 bits cada), a assinatura e a
+verificação funcionam, e alterar a mensagem faz a verificação falhar. O
+esquema é determinístico: a mesma mensagem produz sempre a mesma assinatura.
+
+\subsection*{Q2.b --- Forjar uma assinatura a partir de duas válidas}
+
+Se $s_1 = m_1^d \bmod n$ e $s_2 = m_2^d \bmod n$, então
+\[
+s_1 s_2 \equiv (m_1 m_2)^d \pmod n .
+\]
+Basta portanto definir $m_3 = m_1 m_2 \bmod n$ e
+$s_3 = s_1 s_2 \bmod n$; a assinatura $s_3$ é válida para $m_3$ sem que o
+atacante conheça $d$:
+
+\begin{verbatim}
+m3 = (m1 * m2) % n
+s3 = (s1 * s2) % n
+pow(s3, e, n) == m3        # True, sem conhecer d
+\end{verbatim}
+
+Na execução, $m_1 m_2$ tem 581 bits (logo não há redução módulo $n$), e
+$s_3$ verifica corretamente. A mensagem $m_3$ em bytes não é texto legível:
+\[
+\texttt{1b c6 15 49 4d 7c 54 c2 d6 db 23 5a 56 9b 8c f9 53 9e 79 91 4b 6b c1 bd \ldots}
+\]
+A forja é \textbf{existencial} (\emph{new message for an existing
+signature}): produz uma \emph{mensagem nova} para assinaturas já existentes,
+não uma assinatura fraudulenta para uma mensagem escolhida pelo atacante.
+$m_3$ fica determinado pelo produto de $m_1$ e $m_2$; para um $m_3$ escolhido
+a priori, o atacante teria de o fatorizar em $m_1 m_2$ e obter assinaturas
+nesses fatores, pelo que esta construção não dá uma falsificação para uma
+mensagem arbitrária. A falha mostra que a assinatura tem de resistir a forjas
+existenciais, não apenas a falsificações de mensagens pré-escolhidas.
+
+\subsection*{Q2.c --- Porque é que $E(PR_a, H(M))$ com PSS resiste?}
+
+Com hash, o que é assinado é $H(M)$, e não $M$. O hash destrói a estrutura
+multiplicativa: em geral
+$H(m_1 m_2) \neq H(m_1)H(m_2) \bmod n$, e o produto de duas assinaturas deixa
+de corresponder a uma mensagem com significado. Além disso, o PSS não assina
+$H(M)$ directamente: constrói
+$\mathrm{EMSA\text{-}PSS}(H(M))$ com um \emph{salt} aleatório, MGF1 e um
+trailer fixo, e só depois aplica a exponenciação privada. Duas assinaturas da
+mesma mensagem são diferentes, e a verificação descodifica a estrutura PSS e
+rejeita qualquer resultado que não tenha o padding correcto. Para forjar seria
+necessário inverter o RSA ou encontrar uma colisão/segunda pré-imagem do hash,
+o que é computacionalmente inviável com SHA-256. O hash também resolve o
+problema de tamanho (mensagens maiores que $n$) e liga a assinatura a toda a
+mensagem.
+
+\section*{Questão 3}
+
+\subsection*{Q3.a --- Verificação DSA}
+
+A verificação DSA \cite{fips186} calcula
+\[
+w = s^{-1} \bmod q,\quad u_1 = H(M)w \bmod q,\quad u_2 = rw \bmod q,
+\]
+\[
+v = \left(g^{u_1} y^{u_2} \bmod p\right) \bmod q,
+\]
+e aceita se $v = r$. O programa \texttt{q3a\_dsa\_verify.py} implementa esta
+verificação e confirma as duas assinaturas:
+
+\begin{verbatim}
+p: 1024 bits, q: 160 bits
+Q3.a signature 1 valid: True
+Q3.a signature 2 valid: True
+\end{verbatim}
+
+\subsection*{Q3.b --- O que revela um $r$ partilhado}
+
+Como $r = (g^k \bmod p) \bmod q$, o mesmo $r$ nas duas assinaturas significa
+que foi reutilizado o mesmo $k$. Isto revela que o signatário não gerou um
+nonce novo por assinatura --- por exemplo, usou um $k$ fixo ou um gerador de
+números aleatórios fraco. Da equação de assinatura
+$s = k^{-1}(H(M) + xr) \bmod q$:
+\[
+s_1 = k^{-1}(H_1 + xr), \qquad s_2 = k^{-1}(H_2 + xr).
+\]
+Subtraindo,
+\[
+s_1 - s_2 = k^{-1}(H_1 - H_2) \pmod q
+\quad\Longrightarrow\quad
+k = (H_1 - H_2)(s_1 - s_2)^{-1} \bmod q .
+\]
+Conhecido $k$, obtém-se a chave privada:
+\[
+x = (s_1 k - H_1) r^{-1} \bmod q .
+\]
+Não é preciso resolver logaritmos discretos: a reutilização transforma o
+problema num sistema linear em $\mathbb{Z}_q$. O mesmo acontece se $k$ for
+previsível ou tiver pouca entropia.
+
+\subsection*{Q3.c --- Recuperar $x$ e forjar uma assinatura}
+
+O programa \texttt{q3c\_dsa\_attack.py} aplica as expressões acima com
+$H(M) = \mathrm{int}(\mathrm{SHA\text{-}1}(M)) \bmod q$ e verifica o resultado
+contra a chave pública:
+
+\begin{verbatim}
+Q3.b
+  k  = 0x57981d4fe83ab4095a21184218b0971a379fa99a
+  x  = 0x445240674519b2c71838654fdd1c1c9da2078c62
+  y == g^x mod p: True
+
+Q3.c
+  message = 'TRANSFER 99999 EUR TO ACCOUNT PT50-6666'
+  k3 = 0x5eed1234abcd0001
+  r3 = 0x52de62fab535ceeadaf2bf0b8dc824c1ea8b460a
+  s3 = 0x772474a8ce404dfd66b3a5a4a312dab61bf30875
+  forged signature verifies: True
+\end{verbatim}
+
+A assinatura forjada, com um $k_3$ novo escolhido pelo atacante, passa a
+verificação de Q3.a. A chave privada recuperada permite assinar qualquer
+mensagem, pelo que a reutilização de $k$ compromete a chave por completo. Na
+prática, cada assinatura deve usar um $k$ único e imprevisível, gerado por um
+CSPRNG; a alternativa é a geração determinística do RFC 6979 \cite{rfc6979},
+que deriva $k$ da chave e da mensagem. Note-se ainda que os parâmetros do
+enunciado são DSA legado ($p$ de 1024 bits, $q$ de 160 bits, SHA-1); as
+recomendações atuais pedem grupos maiores e SHA-2/SHA-3, ou ECDSA/EdDSA.
+
+\section*{Conclusão}
+
+O HMAC é a escolha eficiente para integridade e autenticidade entre partes que
+partilham uma chave, mas não serve para não-repúdio, porque ambas conseguem
+forjar a tag. A assinatura digital resolve a disputa porque assenta num segredo
+que só o signatário possui. Cifrar com a chave pública de Alice dá
+confidencialidade, não autenticação da origem: qualquer um pode cifrar. O RSA
+de livro é maleável e permite forjas existenciais por multiplicação, o que o
+hash e o padding PSS eliminam. Por fim, a reutilização do nonce em DSA revela
+$k$ e $x$ por álgebra linear módulo $q$, o que permite assinar qualquer
+mensagem; o nonce tem de ser único por assinatura.
+
+\section*{Como executar}
+
+\begin{verbatim}
+python3 q1a_hmac_vs_rsa.py
+python3 q1c_encrypt_to_alice.py
+python3 q2_textbook_rsa.py
+python3 q3a_dsa_verify.py
+python3 q3c_dsa_attack.py
+pdflatex report.tex && pdflatex report.tex
+\end{verbatim}
+
+\begin{thebibliography}{9}
+
+\bibitem{rfc2104}
+H. Krawczyk, M. Bellare, R. Canetti.
+\newblock \emph{HMAC: Keyed-Hashing for Message Authentication}, RFC 2104, 1997.
+
+\bibitem{rfc8017}
+K. Moriarty, B. Kaliski, J. Jonsson, A. Rusch.
+\newblock \emph{PKCS \#1: RSA Cryptography Specifications Version 2.2}, RFC 8017, 2016.
+
+\bibitem{fips186}
+NIST.
+\newblock \emph{Digital Signature Standard (DSS)}, FIPS 186-5, 2023.
+
+\bibitem{rfc6979}
+T. Pornin.
+\newblock \emph{Deterministic Usage of the Digital Signature Algorithm (DSA) and
+Elliptic Curve Digital Signature Algorithm (ECDSA)}, RFC 6979, 2013.
+
+\end{thebibliography}
+
+\end{document}
